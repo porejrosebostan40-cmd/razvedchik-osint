@@ -1,4 +1,4 @@
-from .collectors import search_github
+from .collectors import search_github, search_sherlock
 from .entities import page_entities
 from .extract import identifiers, domain
 from .models import Investigation
@@ -14,7 +14,7 @@ class Agent:
         self.per_query = per_query
 
     def _collect(self, query: str):
-        """Combine generic web search with a public GitHub search branch."""
+        """Combine web, public GitHub, and optional Sherlock username search."""
         seen: set[str] = set()
         for ev in search_web(query, limit=self.per_query):
             if ev.url not in seen:
@@ -24,6 +24,11 @@ class Agent:
             if ev.url not in seen:
                 seen.add(ev.url)
                 yield ev
+        if self.inv.mode in {"username", "nickname", "combined"}:
+            for ev in search_sherlock(query, limit=min(self.per_query, 20)):
+                if ev.url not in seen:
+                    seen.add(ev.url)
+                    yield ev
 
     def _record(self, query: str, ev) -> None:
         eid = self.inv.add_evidence(ev)
