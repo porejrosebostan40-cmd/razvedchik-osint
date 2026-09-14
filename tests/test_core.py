@@ -1,5 +1,5 @@
 from requests import RequestException
-from razvedchik.collectors import search_github
+from razvedchik.collectors import search_github, search_gitlab, search_wikidata
 from razvedchik.entities import EntityGraph, page_entities, classify_identifier
 from razvedchik.extract import identifiers
 from razvedchik.models import Evidence, Investigation
@@ -63,6 +63,49 @@ def test_github_collector_handles_api_failure(monkeypatch):
     assert search_github("example") == []
 
 
+def test_gitlab_collector_parses_public_user(monkeypatch):
+    class Response:
+        def raise_for_status(self):
+            return None
+
+        def json(self):
+            return [{"username": "alpha", "name": "Alpha Example", "web_url": "https://gitlab.com/alpha", "public_email": "alpha@example.org"}]
+
+    class Client:
+        def get(self, *args, **kwargs):
+            return Response()
+
+    monkeypatch.setattr("razvedchik.collectors.requests", Client())
+    found = search_gitlab("Alpha")
+    assert len(found) == 1
+    assert found[0].source == "GitLab public user search"
+    assert "@alpha" in found[0].snippet
+    assert "alpha@example.org" in found[0].snippet
+
+
+def test_wikidata_collector_parses_public_person(monkeypatch):
+    class Response:
+        def raise_for_status(self):
+            return None
+
+        def json(self):
+            return {"results": {"bindings": [{
+                "item": {"value": "https://www.wikidata.org/entity/Q1"},
+                "itemLabel": {"value": "Alpha Example"},
+                "birth": {"value": "1981-12-18T00:00:00Z"},
+            }]}}
+
+    class Client:
+        def get(self, *args, **kwargs):
+            return Response()
+
+    monkeypatch.setattr("razvedchik.collectors.requests", Client())
+    found = search_wikidata("Alpha Example")
+    assert len(found) == 1
+    assert found[0].source == "Wikidata public knowledge base"
+    assert "1981-12-18" in found[0].snippet
+
+
 def test_relation_graph_and_report_serialization():
     inv = Investigation(mode="combined", query="Test Person")
     ev = Evidence("web", "https://example.org", "Result", "@alpha_user test@example.org", "query")
@@ -74,12 +117,20 @@ def test_relation_graph_and_report_serialization():
     assert data["relations"][0]["evidence_ids"] == [eid]
     assert data["coverage"]["queries_searched"] == 0
     assert data["coverage"]["candidates_total"] == 1
-    assert data["coverage"]["configured_collectors"][-1] == "Sherlock public username search"
+    assert "GitLab public user search" in data["coverage"]["direct_source_collectors"]
+    assert "Wikidata public knowledge base" in data["coverage"]["direct_source_collectors"]
+    assert "Sherlock public username search (optional bridge)" in data["coverage"]["optional_bridges"]
 
 
 def test_configured_collectors_are_mode_aware():
-    assert configured_collectors(Investigation(mode="fio", query="x")) == ["web search", "GitHub public search"]
-    assert "Sherlock public username search" in configured_collectors(Investigation(mode="username", query="x"))
+    fio = configured_collectors(Investigation(mode="fio", query="x"))
+    assert "GitHub public search" in fio
+    assert "GitLab public user search" in fio
+    assert "Wikidata public knowledge base" in fio
+    assert "Sherlock public username search (optional bridge)" not in fio
+    username = configured_collectors(Investigation(mode="username", query="x"))
+    assert "GitLab public user search" in username
+    assert "Sherlock public username search (optional bridge)" in username
 
 
 def test_entity_classification():
