@@ -8,7 +8,7 @@ from .models import Investigation
 def configured_collectors(inv: Investigation) -> list[str]:
     collectors = ["web search", "GitHub public search"]
     if inv.mode in {"fio", "email", "username", "nickname", "combined"}:
-        collectors.append("GitLab public user search")
+        collectors.extend(["GitLab public user search", "Stack Overflow public user search"])
     if inv.mode in {"fio", "combined"}:
         collectors.append("Wikidata public knowledge base")
     if inv.mode in {"username", "nickname", "combined"}:
