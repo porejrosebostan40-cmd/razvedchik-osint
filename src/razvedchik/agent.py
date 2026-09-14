@@ -4,6 +4,7 @@ from .models import Investigation
 from .normalize import expand_queries
 from .planner import ai_queries, deterministic_queries
 from .sources import source_specs_for_mode
+from .correlation import correlate_phone, phone_conflicts
 
 
 VALID_MODES = {"fio", "username", "nickname", "phone", "email", "photo", "combined"}
@@ -62,6 +63,13 @@ class Agent:
                 if pivot not in self.inv.searched and pivot not in self.inv.queue:
                     self.inv.queue.append(pivot)
 
+    def _update_phone_analysis(self) -> None:
+        if self.inv.mode != "phone":
+            return
+        links = correlate_phone(self.inv, self.inv.query)
+        self.inv.phone_links = [link.to_dict() for link in links]
+        self.inv.phone_conflict = phone_conflicts(links)
+
     def run(self) -> Investigation:
         self.inv.queue.extend(expand_queries(self.inv.mode, self.inv.query))
         for wave in range(1, self.max_waves + 1):
@@ -78,6 +86,7 @@ class Agent:
             for q in current:
                 for ev in self._collect(q):
                     self._record(q, ev)
+            self._update_phone_analysis()
             known = sorted({i for c in self.inv.candidates.values() for i in c.identifiers})
             recent_evidence = [f"{ev.source} | {ev.title} | {ev.snippet} | {ev.url}" for ev in list(self.inv.evidence.values())[-8:]]
             planned = ai_queries(self.inv.mode, self.inv.query, known, recent_evidence) or deterministic_queries(self.inv.mode, self.inv.query, known)
@@ -89,6 +98,7 @@ class Agent:
                 break
         else:
             self.inv.stop_reason = "maximum waves reached"
+        self._update_phone_analysis()
         if self.inv.stop_reason == "not finished":
             self.inv.stop_reason = "investigation completed"
         return self.inv
