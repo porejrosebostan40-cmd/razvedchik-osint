@@ -3,17 +3,11 @@ import json
 import os
 from pathlib import Path
 from .models import Investigation
+from .sources import source_specs_for_mode
 
 
 def configured_collectors(inv: Investigation) -> list[str]:
-    collectors = ["web search", "GitHub public search"]
-    if inv.mode in {"fio", "email", "username", "nickname", "combined"}:
-        collectors.extend(["GitLab public user search", "Stack Overflow public user search"])
-    if inv.mode in {"fio", "combined"}:
-        collectors.append("Wikidata public knowledge base")
-    if inv.mode in {"username", "nickname", "combined"}:
-        collectors.append("Sherlock public username search (optional bridge)")
-    return collectors
+    return [spec.name for spec in source_specs_for_mode(inv.mode)]
 
 
 def coverage_summary(inv: Investigation) -> dict:
@@ -22,8 +16,9 @@ def coverage_summary(inv: Investigation) -> dict:
     identifiers = {identifier for candidate in inv.candidates.values() for identifier in candidate.identifiers}
     confirmed = sum(candidate.status == "confirmed by source" for candidate in inv.candidates.values())
     planner = "OpenAI Responses API" if os.getenv("OPENAI_API_KEY") else "deterministic fallback"
-    direct = [name for name in configured_collectors(inv) if "optional bridge" not in name and name != "web search"]
-    bridges = [name for name in configured_collectors(inv) if "optional bridge" in name]
+    specs = source_specs_for_mode(inv.mode)
+    direct = [spec.name for spec in specs if not spec.optional_bridge and spec.name != "web search"]
+    bridges = [spec.name for spec in specs if spec.optional_bridge]
     return {
         "waves_completed": inv.waves,
         "queries_searched": len(inv.searched),
