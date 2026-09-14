@@ -1,10 +1,9 @@
-from .collectors import search_github, search_gitlab, search_sherlock, search_stackexchange, search_wikidata
 from .entities import page_entities
 from .extract import identifiers, domain
 from .models import Investigation
 from .normalize import expand_queries
 from .planner import ai_queries, deterministic_queries
-from .search import search_web
+from .sources import source_specs_for_mode
 
 
 VALID_MODES = {"fio", "username", "nickname", "phone", "email", "photo", "combined"}
@@ -27,19 +26,11 @@ class Agent:
         self.per_query = per_query
 
     def _collect(self, query: str):
-        """Collect from independent public sources; Sherlock remains an optional accelerator."""
+        """Collect through the source registry; optional bridges never replace direct sources."""
         seen: set[str] = set()
-        collectors = [search_web, search_github]
-        if self.inv.mode in {"fio", "email", "username", "nickname", "combined"}:
-            collectors.extend([search_gitlab, search_stackexchange])
-        if self.inv.mode in {"fio", "combined"}:
-            collectors.append(search_wikidata)
-        if self.inv.mode in {"username", "nickname", "combined"}:
-            collectors.append(search_sherlock)
-
-        for collector in collectors:
-            limit = min(self.per_query, 20) if collector is search_sherlock else min(self.per_query, 10)
-            for ev in collector(query, limit=limit):
+        for spec in source_specs_for_mode(self.inv.mode):
+            limit = min(self.per_query, spec.max_limit)
+            for ev in spec.collector(query, limit=limit):
                 if ev.url not in seen:
                     seen.add(ev.url)
                     yield ev
