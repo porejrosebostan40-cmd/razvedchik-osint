@@ -52,6 +52,11 @@ def to_dict(inv: Investigation) -> dict:
         "waves": inv.waves,
         "stop_reason": inv.stop_reason,
         "coverage": coverage_summary(inv),
+        "phone_analysis": {
+            "links": inv.phone_links,
+            "de_jure_de_facto_conflict": inv.phone_conflict,
+            "principle": "de jure и de facto рассматриваются раздельно; упоминание номера само по себе не доказывает ни владение, ни фактическое использование.",
+        } if inv.mode == "phone" else None,
         "source_runs": sorted(inv.source_runs.values(), key=lambda x: (x["source"], x["query"])),
         "searched_queries": sorted(inv.searched),
         "evidence": [asdict(x) | {"evidence_id": x.evidence_id} for x in inv.evidence.values()],
@@ -90,8 +95,19 @@ def write_reports(inv: Investigation, directory: str = "reports") -> tuple[str, 
         f"- В очереди осталось: {coverage['queries_pending']}",
         f"- Ограничение покрытия: {coverage['coverage_note']}",
         "",
-        "## Кандидаты",
     ]
+    if inv.mode == "phone":
+        lines += ["## Телефон: de jure / de facto", ""]
+        lines.append("Связь номера с владельцем и фактическим пользователем анализируется раздельно. Упоминание номера не считается доказательством владения или фактического использования.")
+        lines.append("")
+        if inv.phone_conflict:
+            lines.append("Обнаружен конфликт de jure/de facto: источники указывают разные типы связи с номером.")
+        else:
+            lines.append("Автоматически подтверждённого конфликта de jure/de facto не обнаружено.")
+        for link in inv.phone_links:
+            lines += [f"- `{link['candidate_key']}` — {link['role']}; оценка {link['score']:.1f}; доказательства: {', '.join(link['evidence_ids']) or 'нет'}"]
+        lines.append("")
+    lines += ["## Кандидаты", ""]
     for c in sorted(inv.candidates.values(), key=lambda x: x.score, reverse=True):
         lines += [f"### {c.key}", f"- Статус: {c.status}", f"- Оценка: {c.score:.1f}", f"- Идентификаторы: {', '.join(sorted(c.identifiers)) or 'нет'}", f"- Источники: {', '.join(sorted(c.sources)) or 'нет'}", f"- Домены: {', '.join(sorted(c.domains)) or 'нет'}", ""]
     lines += ["## Сущности", ""]
