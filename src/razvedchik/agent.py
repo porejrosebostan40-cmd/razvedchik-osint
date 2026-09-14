@@ -1,4 +1,4 @@
-from .collectors import search_github, search_gitlab, search_sherlock, search_wikidata
+from .collectors import search_github, search_gitlab, search_sherlock, search_stackexchange, search_wikidata
 from .entities import page_entities
 from .extract import identifiers, domain
 from .models import Investigation
@@ -31,7 +31,7 @@ class Agent:
         seen: set[str] = set()
         collectors = [search_web, search_github]
         if self.inv.mode in {"fio", "email", "username", "nickname", "combined"}:
-            collectors.append(search_gitlab)
+            collectors.extend([search_gitlab, search_stackexchange])
         if self.inv.mode in {"fio", "combined"}:
             collectors.append(search_wikidata)
         if self.inv.mode in {"username", "nickname", "combined"}:
