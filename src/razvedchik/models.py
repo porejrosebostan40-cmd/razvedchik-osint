@@ -69,6 +69,7 @@ class Investigation:
     mode: str
     query: str
     waves: int = 0
+    stop_reason: str = "not finished"
     evidence: dict[str, Evidence] = field(default_factory=dict)
     candidates: dict[str, Candidate] = field(default_factory=dict)
     relations: list[Relation] = field(default_factory=list)
