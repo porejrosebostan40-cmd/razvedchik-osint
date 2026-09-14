@@ -1,4 +1,5 @@
 from .collectors import search_github
+from .entities import page_entities
 from .extract import identifiers, domain
 from .models import Investigation
 from .normalize import expand_queries
@@ -31,6 +32,12 @@ class Agent:
         dom = {domain(ev.url)} - {""}
         key = "|".join(sorted(ids)[:3]) if ids else f"seed:{self.inv.query}"
         self.inv.add_candidate(key, ev.title, ids, {eid}, dom, {ev.source})
+
+        graph, edges = page_entities(ev.title, ev.snippet, ev.url, ids, eid)
+        self.inv.entity_graph.entities.update(graph.entities)
+        for left, relation, right in edges:
+            self.inv.add_relation(left, relation, right, eid)
+
         ordered = sorted(ids)
         for left in ordered:
             for right in ordered:
