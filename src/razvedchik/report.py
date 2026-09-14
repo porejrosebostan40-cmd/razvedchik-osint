@@ -19,6 +19,10 @@ def coverage_summary(inv: Investigation) -> dict:
     specs = source_specs_for_mode(inv.mode)
     direct = [spec.name for spec in specs if not spec.optional_bridge and spec.name != "web search"]
     bridges = [spec.name for spec in specs if spec.optional_bridge]
+    attempted = sum(row["attempts"] for row in inv.source_runs.values())
+    successful = sum(1 for row in inv.source_runs.values() if row["attempts"] and not row["errors"])
+    failed = sum(1 for row in inv.source_runs.values() if row["errors"])
+    no_results = sum(1 for row in inv.source_runs.values() if row["attempts"] and row["results"] == 0 and not row["errors"])
     return {
         "waves_completed": inv.waves,
         "queries_searched": len(inv.searched),
@@ -33,6 +37,10 @@ def coverage_summary(inv: Investigation) -> dict:
         "identifiers_observed": len(identifiers),
         "candidates_total": len(inv.candidates),
         "candidates_confirmed_by_source": confirmed,
+        "source_attempts": attempted,
+        "source_successes": successful,
+        "source_no_results": no_results,
+        "source_failures": failed,
         "coverage_note": "Coverage is bounded by configured collectors, public-source visibility, search-engine results, source rate limits, and investigation limits.",
     }
 
@@ -44,6 +52,7 @@ def to_dict(inv: Investigation) -> dict:
         "waves": inv.waves,
         "stop_reason": inv.stop_reason,
         "coverage": coverage_summary(inv),
+        "source_runs": sorted(inv.source_runs.values(), key=lambda x: (x["source"], x["query"])),
         "searched_queries": sorted(inv.searched),
         "evidence": [asdict(x) | {"evidence_id": x.evidence_id} for x in inv.evidence.values()],
         "candidates": [c.to_dict() for c in sorted(inv.candidates.values(), key=lambda x: x.score, reverse=True)],
@@ -72,6 +81,8 @@ def write_reports(inv: Investigation, directory: str = "reports") -> tuple[str, 
         f"- Прямые источники: {', '.join(coverage['direct_source_collectors']) or 'нет'}",
         f"- Дополнительные мосты: {', '.join(coverage['optional_bridges']) or 'нет'}",
         f"- Фактически наблюдавшиеся источники: {', '.join(coverage['observed_sources']) or 'нет'}",
+        f"- Попыток обращения к источникам: {coverage['source_attempts']}",
+        f"- Успешных обращений: {coverage['source_successes']}; без результатов: {coverage['source_no_results']}; с ошибками: {coverage['source_failures']}",
         f"- Планировщик: {coverage['planner']}",
         f"- Доменов обнаружено: {coverage['domains_observed']}",
         f"- Идентификаторов обнаружено: {coverage['identifiers_observed']}",
