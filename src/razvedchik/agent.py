@@ -7,9 +7,22 @@ from .planner import ai_queries, deterministic_queries
 from .search import search_web
 
 
+VALID_MODES = {"fio", "username", "nickname", "phone", "email", "photo", "combined"}
+
+
 class Agent:
     def __init__(self, mode: str, query: str, max_waves: int = 3, per_query: int = 6):
-        self.inv = Investigation(mode=mode, query=query)
+        if mode not in VALID_MODES:
+            raise ValueError(f"unsupported mode: {mode}")
+        if not query or not query.strip():
+            raise ValueError("query must not be empty")
+        if mode == "photo":
+            raise ValueError("photo mode requires a legitimate visual-search adapter")
+        if max_waves < 1 or max_waves > 12:
+            raise ValueError("max_waves must be between 1 and 12")
+        if per_query < 1 or per_query > 20:
+            raise ValueError("per_query must be between 1 and 20")
+        self.inv = Investigation(mode=mode, query=query.strip())
         self.max_waves = max_waves
         self.per_query = per_query
 
