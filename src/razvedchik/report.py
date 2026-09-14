@@ -7,8 +7,12 @@ from .models import Investigation
 
 def configured_collectors(inv: Investigation) -> list[str]:
     collectors = ["web search", "GitHub public search"]
+    if inv.mode in {"fio", "email", "username", "nickname", "combined"}:
+        collectors.append("GitLab public user search")
+    if inv.mode in {"fio", "combined"}:
+        collectors.append("Wikidata public knowledge base")
     if inv.mode in {"username", "nickname", "combined"}:
-        collectors.append("Sherlock public username search")
+        collectors.append("Sherlock public username search (optional bridge)")
     return collectors
 
 
@@ -18,19 +22,23 @@ def coverage_summary(inv: Investigation) -> dict:
     identifiers = {identifier for candidate in inv.candidates.values() for identifier in candidate.identifiers}
     confirmed = sum(candidate.status == "confirmed by source" for candidate in inv.candidates.values())
     planner = "OpenAI Responses API" if os.getenv("OPENAI_API_KEY") else "deterministic fallback"
+    direct = [name for name in configured_collectors(inv) if "optional bridge" not in name and name != "web search"]
+    bridges = [name for name in configured_collectors(inv) if "optional bridge" in name]
     return {
         "waves_completed": inv.waves,
         "queries_searched": len(inv.searched),
         "queries_pending": len(inv.queue),
         "evidence_items": len(inv.evidence),
         "configured_collectors": configured_collectors(inv),
+        "direct_source_collectors": direct,
+        "optional_bridges": bridges,
         "observed_sources": sorted(source_names),
         "planner": planner,
         "domains_observed": len(domains),
         "identifiers_observed": len(identifiers),
         "candidates_total": len(inv.candidates),
         "candidates_confirmed_by_source": confirmed,
-        "coverage_note": "Coverage is bounded by configured collectors, public-source visibility, search-engine results, and investigation limits.",
+        "coverage_note": "Coverage is bounded by configured collectors, public-source visibility, search-engine results, source rate limits, and investigation limits.",
     }
 
 
@@ -66,7 +74,8 @@ def write_reports(inv: Investigation, directory: str = "reports") -> tuple[str, 
         "## Покрытие расследования",
         f"- Запросов проверено: {coverage['queries_searched']}",
         f"- Доказательств собрано: {coverage['evidence_items']}",
-        f"- Настроенные сборщики: {', '.join(coverage['configured_collectors'])}",
+        f"- Прямые источники: {', '.join(coverage['direct_source_collectors']) or 'нет'}",
+        f"- Дополнительные мосты: {', '.join(coverage['optional_bridges']) or 'нет'}",
         f"- Фактически наблюдавшиеся источники: {', '.join(coverage['observed_sources']) or 'нет'}",
         f"- Планировщик: {coverage['planner']}",
         f"- Доменов обнаружено: {coverage['domains_observed']}",
