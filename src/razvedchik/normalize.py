@@ -29,6 +29,16 @@ def expand_queries(mode: str, query: str) -> list[str]:
         return phone_variants(q)
     if mode in {"fio", "combined"}:
         parts = q.split()
-        if len(parts) >= 2:
-            return [q, " ".join(parts[:2]), " ".join(p[0] for p in parts if p)]
+        alpha_parts = [part for part in parts if re.fullmatch(r"[\wА-Яа-яЁё-]+", part, flags=re.UNICODE)]
+        year_or_date = [
+            part for part in parts
+            if re.fullmatch(r"(?:19|20)\d{2}", part)
+            or re.fullmatch(r"\d{1,2}[./-]\d{1,2}[./-](?:19|20)\d{2}", part)
+        ]
+        if len(alpha_parts) >= 2:
+            fio = " ".join(alpha_parts)
+            variants = [q, fio, " ".join(part[0] for part in alpha_parts if part)]
+            if year_or_date:
+                variants.extend(f'"{fio}" {value}' for value in year_or_date)
+            return list(dict.fromkeys(variants))
     return [q]
