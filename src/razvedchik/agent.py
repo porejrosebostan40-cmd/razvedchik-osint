@@ -64,6 +64,7 @@ class Agent:
                     current.append(q)
                     self.inv.searched.add(q)
             if not current:
+                self.inv.stop_reason = "search queue exhausted"
                 break
             for q in current:
                 for ev in self._collect(q):
@@ -74,5 +75,10 @@ class Agent:
                 if q not in self.inv.searched and q not in self.inv.queue:
                     self.inv.queue.append(q)
             if not self.inv.queue:
+                self.inv.stop_reason = "no new queries"
                 break
+        else:
+            self.inv.stop_reason = "maximum waves reached"
+        if self.inv.stop_reason == "not finished":
+            self.inv.stop_reason = "investigation completed"
         return self.inv
