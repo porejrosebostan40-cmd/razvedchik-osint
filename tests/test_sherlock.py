@@ -1,0 +1,24 @@
+from types import SimpleNamespace
+
+from razvedchik.collectors import search_sherlock
+
+
+def test_sherlock_collector_parses_public_profile_urls(monkeypatch):
+    monkeypatch.setattr("razvedchik.collectors.shutil.which", lambda name: "/usr/bin/sherlock")
+    monkeypatch.setattr(
+        "razvedchik.collectors.subprocess.run",
+        lambda *args, **kwargs: SimpleNamespace(
+            stdout="Found: https://example.org/user\nFound: https://social.example/user\n"
+        ),
+    )
+    results = search_sherlock("alpha_user")
+    assert [item.url for item in results] == [
+        "https://example.org/user",
+        "https://social.example/user",
+    ]
+    assert all(item.kind == "sherlock-profile" for item in results)
+
+
+def test_sherlock_collector_rejects_email_like_input(monkeypatch):
+    monkeypatch.setattr("razvedchik.collectors.shutil.which", lambda name: "/usr/bin/sherlock")
+    assert search_sherlock("person@example.org") == []
