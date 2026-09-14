@@ -1,4 +1,4 @@
-from .collectors import search_github, search_sherlock
+from .collectors import search_github, search_gitlab, search_sherlock, search_wikidata
 from .entities import page_entities
 from .extract import identifiers, domain
 from .models import Investigation
@@ -14,18 +14,19 @@ class Agent:
         self.per_query = per_query
 
     def _collect(self, query: str):
-        """Combine web, public GitHub, and optional Sherlock username search."""
+        """Collect from independent public sources; Sherlock remains an optional accelerator."""
         seen: set[str] = set()
-        for ev in search_web(query, limit=self.per_query):
-            if ev.url not in seen:
-                seen.add(ev.url)
-                yield ev
-        for ev in search_github(query, limit=min(self.per_query, 6)):
-            if ev.url not in seen:
-                seen.add(ev.url)
-                yield ev
+        collectors = [search_web, search_github]
+        if self.inv.mode in {"fio", "email", "username", "nickname", "combined"}:
+            collectors.append(search_gitlab)
+        if self.inv.mode in {"fio", "combined"}:
+            collectors.append(search_wikidata)
         if self.inv.mode in {"username", "nickname", "combined"}:
-            for ev in search_sherlock(query, limit=min(self.per_query, 20)):
+            collectors.append(search_sherlock)
+
+        for collector in collectors:
+            limit = min(self.per_query, 20) if collector is search_sherlock else min(self.per_query, 10)
+            for ev in collector(query, limit=limit):
                 if ev.url not in seen:
                     seen.add(ev.url)
                     yield ev
