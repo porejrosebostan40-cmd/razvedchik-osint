@@ -6,7 +6,7 @@ from .planner import ai_queries, deterministic_queries
 from .sources import source_specs_for_mode
 
 
-VALID_MODES = {"fio", "username", "nickname", "phone", "email", "combined"}
+VALID_MODES = {"fio", "username", "nickname", "phone", "email", "photo", "combined"}
 
 
 class Agent:
@@ -15,6 +15,8 @@ class Agent:
             raise ValueError(f"unsupported mode: {mode}")
         if not query or not query.strip():
             raise ValueError("query must not be empty")
+        if mode == "photo":
+            raise ValueError("photo mode is intentionally excluded from Razvedchik")
         if max_waves < 1 or max_waves > 12:
             raise ValueError("max_waves must be between 1 and 12")
         if per_query < 1 or per_query > 20:
@@ -46,12 +48,10 @@ class Agent:
         dom = {domain(ev.url)} - {""}
         key = "|".join(sorted(ids)[:3]) if ids else f"evidence:{eid}"
         self.inv.add_candidate(key, ev.title, ids, {eid}, dom, {ev.source})
-
         graph, edges = page_entities(ev.title, ev.snippet, ev.url, ids, eid)
         self.inv.entity_graph.merge(graph)
         for left, relation, right in edges:
             self.inv.add_relation(left, relation, right, eid)
-
         ordered = sorted(ids)
         for left in ordered:
             for right in ordered:
@@ -79,10 +79,7 @@ class Agent:
                 for ev in self._collect(q):
                     self._record(q, ev)
             known = sorted({i for c in self.inv.candidates.values() for i in c.identifiers})
-            recent_evidence = [
-                f"{ev.source} | {ev.title} | {ev.snippet} | {ev.url}"
-                for ev in list(self.inv.evidence.values())[-8:]
-            ]
+            recent_evidence = [f"{ev.source} | {ev.title} | {ev.snippet} | {ev.url}" for ev in list(self.inv.evidence.values())[-8:]]
             planned = ai_queries(self.inv.mode, self.inv.query, known, recent_evidence) or deterministic_queries(self.inv.mode, self.inv.query, known)
             for q in planned:
                 if q not in self.inv.searched and q not in self.inv.queue:
