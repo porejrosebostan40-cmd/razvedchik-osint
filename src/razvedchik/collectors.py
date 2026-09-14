@@ -48,7 +48,13 @@ def search_sherlock(username: str, limit: int = 20, timeout: int = 15) -> list[E
     """Use an installed Sherlock CLI to enumerate public username profiles."""
     executable = shutil.which("sherlock")
     clean = username.strip().lstrip("@")
-    if not executable or not clean or any(ch.isspace() for ch in clean) or "@" in clean:
+    if (
+        not executable
+        or not clean
+        or any(ch.isspace() for ch in clean)
+        or "@" in clean
+        or clean.isdigit()
+    ):
         return []
     try:
         completed = subprocess.run(
