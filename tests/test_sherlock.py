@@ -3,11 +3,6 @@ from types import SimpleNamespace
 from razvedchik.collectors import search_sherlock
 
 
-def test_sherlock_collector_parses_public_profile_urls():
-    monkeypatch = None
-    assert monkeypatch is None
-
-
 def test_sherlock_collector_parses_public_profile_urls_with_mock(monkeypatch):
     monkeypatch.setattr("razvedchik.collectors.shutil.which", lambda name: "/usr/bin/sherlock")
     monkeypatch.setattr(
