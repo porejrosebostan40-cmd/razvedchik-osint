@@ -1,7 +1,15 @@
 from dataclasses import asdict
 import json
+import os
 from pathlib import Path
 from .models import Investigation
+
+
+def configured_collectors(inv: Investigation) -> list[str]:
+    collectors = ["web search", "GitHub public search"]
+    if inv.mode in {"username", "nickname", "combined"}:
+        collectors.append("Sherlock public username search")
+    return collectors
 
 
 def coverage_summary(inv: Investigation) -> dict:
@@ -9,12 +17,15 @@ def coverage_summary(inv: Investigation) -> dict:
     domains = {domain for candidate in inv.candidates.values() for domain in candidate.domains}
     identifiers = {identifier for candidate in inv.candidates.values() for identifier in candidate.identifiers}
     confirmed = sum(candidate.status == "confirmed by source" for candidate in inv.candidates.values())
+    planner = "OpenAI Responses API" if os.getenv("OPENAI_API_KEY") else "deterministic fallback"
     return {
         "waves_completed": inv.waves,
         "queries_searched": len(inv.searched),
         "queries_pending": len(inv.queue),
         "evidence_items": len(inv.evidence),
-        "source_types": sorted(source_names),
+        "configured_collectors": configured_collectors(inv),
+        "observed_sources": sorted(source_names),
+        "planner": planner,
         "domains_observed": len(domains),
         "identifiers_observed": len(identifiers),
         "candidates_total": len(inv.candidates),
@@ -55,10 +66,12 @@ def write_reports(inv: Investigation, directory: str = "reports") -> tuple[str, 
         "## Покрытие расследования",
         f"- Запросов проверено: {coverage['queries_searched']}",
         f"- Доказательств собрано: {coverage['evidence_items']}",
+        f"- Настроенные сборщики: {', '.join(coverage['configured_collectors'])}",
+        f"- Фактически наблюдавшиеся источники: {', '.join(coverage['observed_sources']) or 'нет'}",
+        f"- Планировщик: {coverage['planner']}",
         f"- Доменов обнаружено: {coverage['domains_observed']}",
         f"- Идентификаторов обнаружено: {coverage['identifiers_observed']}",
         f"- Кандидатов: {coverage['candidates_total']}; подтверждено источниками: {coverage['candidates_confirmed_by_source']}",
-        f"- Источники: {', '.join(coverage['source_types']) or 'нет'}",
         f"- В очереди осталось: {coverage['queries_pending']}",
         f"- Ограничение покрытия: {coverage['coverage_note']}",
         "",
