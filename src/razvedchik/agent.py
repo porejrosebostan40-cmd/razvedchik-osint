@@ -42,9 +42,7 @@ class Agent:
                     ids = identifiers(f"{ev.title} {ev.snippet}")
                     dom = {domain(ev.url)} - {""}
                     key = "|".join(sorted(ids)[:3]) if ids else f"seed:{self.inv.query}"
-                    self.inv.add_candidate(key, ev.title, ids, {eid}, dom)
-                    # Autonomous second-generation pivots: identifiers discovered in evidence
-                    # become future search seeds without requiring user approval.
+                    self.inv.add_candidate(key, ev.title, ids, {eid}, dom, {ev.source})
                     for ident in sorted(ids):
                         for pivot in (ident, f'"{ident}"'):
                             if pivot not in self.inv.searched and pivot not in self.inv.queue:
