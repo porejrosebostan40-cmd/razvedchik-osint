@@ -47,21 +47,22 @@ def classify_identifier(value: str) -> str:
 def page_entities(title: str, snippet: str, url: str, identifiers: set[str], evidence_id: str) -> tuple[EntityGraph, list[tuple[str, str, str]]]:
     graph = EntityGraph()
     edges: list[tuple[str, str, str]] = []
+    identifier_keys: list[str] = []
     for value in sorted(identifiers):
         key = graph.add(classify_identifier(value), value, evidence_id)
+        identifier_keys.append(key)
         edges.append((key, "mentioned_on", url))
 
     host = urlparse(url).netloc.lower().removeprefix("www.")
     if host:
         domain_key = graph.add("domain", host, evidence_id)
-        for key, _, _ in edges:
+        for key in identifier_keys:
             edges.append((key, "found_on", domain_key))
 
     # Preserve the page title as a searchable label, but do not infer identity from it.
     label = re.sub(r"\s+", " ", title).strip()
     if label:
         label_key = graph.add("page", label[:240], evidence_id)
-        for key, _, _ in edges:
-            if key.startswith(("username:", "email:", "phone:")):
-                edges.append((key, "appears_on", label_key))
+        for key in identifier_keys:
+            edges.append((key, "appears_on", label_key))
     return graph, edges
