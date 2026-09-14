@@ -20,7 +20,26 @@ def test_agent_records_entities_and_pivots(monkeypatch):
     assert "username:@alpha" in result.entity_graph.entities
     assert "email:alpha@example.org" in result.entity_graph.entities
     assert '"@alpha"' in result.queue
+    assert result.source_runs["web search|alpha"]["results"] == 1
     assert result.stop_reason == "maximum waves reached"
+
+
+def test_agent_records_source_failure(monkeypatch):
+    agent = Agent("username", "alpha", max_waves=1, per_query=1)
+
+    def broken(query, limit=1):
+        raise RuntimeError("collector failed")
+
+    specs = [SourceSpec("broken source", broken, frozenset({"username"}))]
+    monkeypatch.setattr("razvedchik.agent.source_specs_for_mode", lambda mode: specs)
+    monkeypatch.setattr("razvedchik.agent.ai_queries", lambda *a, **k: [])
+    monkeypatch.setattr("razvedchik.agent.deterministic_queries", lambda *a, **k: [])
+
+    result = agent.run()
+    run = result.source_runs["broken source|alpha"]
+    assert run["attempts"] == 1
+    assert run["results"] == 0
+    assert run["errors"]
 
 
 def test_agent_rejects_unsafe_runtime_limits():
