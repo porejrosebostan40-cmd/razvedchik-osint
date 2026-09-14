@@ -76,10 +76,19 @@ class Investigation:
     entity_graph: EntityGraph = field(default_factory=EntityGraph)
     searched: set[str] = field(default_factory=set)
     queue: list[str] = field(default_factory=list)
+    source_runs: dict[str, dict[str, Any]] = field(default_factory=dict)
 
     def add_evidence(self, item: Evidence) -> str:
         self.evidence[item.evidence_id] = item
         return item.evidence_id
+
+    def record_source_run(self, source: str, query: str, result_count: int, error: str | None = None) -> None:
+        key = f"{source}|{query}"
+        row = self.source_runs.setdefault(key, {"source": source, "query": query, "attempts": 0, "results": 0, "errors": []})
+        row["attempts"] += 1
+        row["results"] += result_count
+        if error:
+            row["errors"].append(error[:240])
 
     def add_relation(self, left: str, relation: str, right: str, evidence_id: str) -> None:
         if not left or not right or left == right:
