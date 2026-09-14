@@ -25,5 +25,5 @@ def test_agent_records_entities_and_pivots(monkeypatch):
     result = agent.run()
     assert "username:@alpha" in result.entity_graph.entities
     assert "email:alpha@example.org" in result.entity_graph.entities
-    assert '"@alpha"' in result.queue or "@alpha" in result.queue
-    assert result.stop_reason == "no new queries"
+    assert '"@alpha"' in result.queue
+    assert result.stop_reason == "maximum waves reached"
