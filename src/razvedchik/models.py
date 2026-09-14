@@ -2,6 +2,7 @@ from dataclasses import dataclass, field, asdict
 from typing import Any
 import hashlib
 import json
+from .entities import EntityGraph
 
 
 @dataclass(frozen=True)
@@ -68,6 +69,7 @@ class Investigation:
     evidence: dict[str, Evidence] = field(default_factory=dict)
     candidates: dict[str, Candidate] = field(default_factory=dict)
     relations: list[Relation] = field(default_factory=list)
+    entity_graph: EntityGraph = field(default_factory=EntityGraph)
     searched: set[str] = field(default_factory=set)
     queue: list[str] = field(default_factory=list)
 
