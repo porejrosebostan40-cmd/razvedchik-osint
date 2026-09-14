@@ -9,6 +9,7 @@ def to_dict(inv: Investigation) -> dict:
         "mode": inv.mode,
         "query": inv.query,
         "waves": inv.waves,
+        "stop_reason": inv.stop_reason,
         "searched_queries": sorted(inv.searched),
         "evidence": [asdict(x) | {"evidence_id": x.evidence_id} for x in inv.evidence.values()],
         "candidates": [c.to_dict() for c in sorted(inv.candidates.values(), key=lambda x: x.score, reverse=True)],
@@ -23,7 +24,7 @@ def write_reports(inv: Investigation, directory: str = "reports") -> tuple[str, 
     json_path = Path(directory) / "investigation.json"
     md_path = Path(directory) / "investigation.md"
     json_path.write_text(json.dumps(data, ensure_ascii=False, indent=2), encoding="utf-8")
-    lines = [f"# Разведчик: {inv.query}", "", f"Режим: {inv.mode}", f"Волн: {inv.waves}", "", "## Кандидаты"]
+    lines = [f"# Разведчик: {inv.query}", "", f"Режим: {inv.mode}", f"Волн: {inv.waves}", f"Причина остановки: {inv.stop_reason}", "", "## Кандидаты"]
     for c in sorted(inv.candidates.values(), key=lambda x: x.score, reverse=True):
         lines += [f"### {c.key}", f"- Статус: {c.status}", f"- Оценка: {c.score:.1f}", f"- Идентификаторы: {', '.join(sorted(c.identifiers)) or 'нет'}", f"- Источники: {', '.join(sorted(c.sources)) or 'нет'}", f"- Домены: {', '.join(sorted(c.domains)) or 'нет'}", ""]
     lines += ["## Сущности", ""]
