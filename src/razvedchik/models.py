@@ -26,6 +26,7 @@ class Candidate:
     labels: set[str] = field(default_factory=set)
     identifiers: set[str] = field(default_factory=set)
     evidence_ids: set[str] = field(default_factory=set)
+    sources: set[str] = field(default_factory=set)
     domains: set[str] = field(default_factory=set)
     score: float = 0.0
     status: str = "possible match"
@@ -36,6 +37,7 @@ class Candidate:
             "labels": sorted(self.labels),
             "identifiers": sorted(self.identifiers),
             "evidence_ids": sorted(self.evidence_ids),
+            "sources": sorted(self.sources),
             "domains": sorted(self.domains),
             "score": round(self.score, 3),
             "status": self.status,
@@ -56,12 +58,17 @@ class Investigation:
         self.evidence[item.evidence_id] = item
         return item.evidence_id
 
-    def add_candidate(self, key: str, label: str, identifiers: set[str], evidence_ids: set[str], domains: set[str] | None = None) -> Candidate:
+    def add_candidate(self, key: str, label: str, identifiers: set[str], evidence_ids: set[str], domains: set[str] | None = None, sources: set[str] | None = None) -> Candidate:
         candidate = self.candidates.setdefault(key, Candidate(key=key))
         candidate.labels.add(label)
         candidate.identifiers.update(identifiers)
         candidate.evidence_ids.update(evidence_ids)
         candidate.domains.update(domains or set())
+        candidate.sources.update(sources or set())
         candidate.score = min(100.0, candidate.score + 5 + 3 * len(identifiers) + min(10, len(candidate.domains) * 2))
-        candidate.status = "confirmed by source" if len(candidate.evidence_ids) >= 3 and len(candidate.domains) >= 2 else "possible match"
+        candidate.status = (
+            "confirmed by source"
+            if len(candidate.evidence_ids) >= 3 and len(candidate.domains) >= 2 and len(candidate.sources) >= 2
+            else "possible match"
+        )
         return candidate
