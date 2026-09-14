@@ -18,13 +18,23 @@ def test_phone_variants():
     assert "79991234567" in values
 
 
-def test_candidate_confidence_progression():
+def test_candidate_needs_independent_sources():
     inv = Investigation(mode="fio", query="Test Person")
     ids = {"@alpha_user", "test@example.org"}
     for n in range(3):
-        ev = Evidence("source", f"https://example{n}.org", f"Result {n}", "snippet", "query")
+        ev = Evidence("same-source", f"https://example{n}.org", f"Result {n}", "snippet", "query")
         eid = inv.add_evidence(ev)
-        inv.add_candidate("candidate", "Result", ids, {eid}, {f"example{n}.org"})
+        inv.add_candidate("candidate", "Result", ids, {eid}, {f"example{n}.org"}, {ev.source})
+    assert inv.candidates["candidate"].status == "possible match"
+
+
+def test_candidate_confirms_with_independent_sources():
+    inv = Investigation(mode="fio", query="Test Person")
+    ids = {"@alpha_user", "test@example.org"}
+    for n, source in enumerate(("web", "github", "registry")):
+        ev = Evidence(source, f"https://example{n}.org", f"Result {n}", "snippet", "query")
+        eid = inv.add_evidence(ev)
+        inv.add_candidate("candidate", "Result", ids, {eid}, {f"example{n}.org"}, {source})
     assert inv.candidates["candidate"].status == "confirmed by source"
     assert inv.candidates["candidate"].score > 0
 
