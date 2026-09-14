@@ -45,6 +45,9 @@ class Candidate:
     evidence_ids: set[str] = field(default_factory=set)
     sources: set[str] = field(default_factory=set)
     domains: set[str] = field(default_factory=set)
+    identifier_evidence: dict[str, set[str]] = field(default_factory=dict)
+    identifier_sources: dict[str, set[str]] = field(default_factory=dict)
+    identifier_domains: dict[str, set[str]] = field(default_factory=dict)
     score: float = 0.0
     status: str = "possible match"
 
@@ -88,15 +91,29 @@ class Investigation:
 
     def add_candidate(self, key: str, label: str, identifiers: set[str], evidence_ids: set[str], domains: set[str] | None = None, sources: set[str] | None = None) -> Candidate:
         candidate = self.candidates.setdefault(key, Candidate(key=key))
+        domains = domains or set()
+        sources = sources or set()
         candidate.labels.add(label)
         candidate.identifiers.update(identifiers)
         candidate.evidence_ids.update(evidence_ids)
-        candidate.domains.update(domains or set())
-        candidate.sources.update(sources or set())
+        candidate.domains.update(domains)
+        candidate.sources.update(sources)
+        for identifier in identifiers:
+            candidate.identifier_evidence.setdefault(identifier, set()).update(evidence_ids)
+            candidate.identifier_sources.setdefault(identifier, set()).update(sources)
+            candidate.identifier_domains.setdefault(identifier, set()).update(domains)
+
         candidate.score = min(100.0, candidate.score + 5 + 3 * len(identifiers) + min(10, len(candidate.domains) * 2))
-        candidate.status = (
-            "confirmed by source"
-            if len(candidate.evidence_ids) >= 3 and len(candidate.domains) >= 2 and len(candidate.sources) >= 2
-            else "possible match"
+        independently_supported = any(
+            len(candidate.identifier_evidence.get(identifier, set())) >= 2
+            and len(candidate.identifier_sources.get(identifier, set())) >= 2
+            and len(candidate.identifier_domains.get(identifier, set())) >= 2
+            for identifier in candidate.identifiers
+            if _is_stable_identifier(identifier)
         )
+        candidate.status = "confirmed by source" if independently_supported else "possible match"
         return candidate
+
+
+def _is_stable_identifier(value: str) -> bool:
+    return value.startswith("@") or ("@" in value and "." in value.rsplit("@", 1)[-1]) or (value.isdigit() and 9 <= len(value) <= 15)
