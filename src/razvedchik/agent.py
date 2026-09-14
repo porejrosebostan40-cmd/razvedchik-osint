@@ -71,7 +71,11 @@ class Agent:
                 for ev in self._collect(q):
                     self._record(q, ev)
             known = sorted({i for c in self.inv.candidates.values() for i in c.identifiers})
-            planned = ai_queries(self.inv.mode, self.inv.query, known) or deterministic_queries(self.inv.mode, self.inv.query, known)
+            recent_evidence = [
+                f"{ev.source} | {ev.title} | {ev.snippet} | {ev.url}"
+                for ev in list(self.inv.evidence.values())[-8:]
+            ]
+            planned = ai_queries(self.inv.mode, self.inv.query, known, recent_evidence) or deterministic_queries(self.inv.mode, self.inv.query, known)
             for q in planned:
                 if q not in self.inv.searched and q not in self.inv.queue:
                     self.inv.queue.append(q)
