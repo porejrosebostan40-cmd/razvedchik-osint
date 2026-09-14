@@ -6,7 +6,7 @@ from .planner import ai_queries, deterministic_queries
 from .sources import source_specs_for_mode
 
 
-VALID_MODES = {"fio", "username", "nickname", "phone", "email", "photo", "combined"}
+VALID_MODES = {"fio", "username", "nickname", "phone", "email", "combined"}
 
 
 class Agent:
@@ -15,8 +15,6 @@ class Agent:
             raise ValueError(f"unsupported mode: {mode}")
         if not query or not query.strip():
             raise ValueError("query must not be empty")
-        if mode == "photo":
-            raise ValueError("photo mode requires a legitimate visual-search adapter")
         if max_waves < 1 or max_waves > 12:
             raise ValueError("max_waves must be between 1 and 12")
         if per_query < 1 or per_query > 20:
@@ -30,7 +28,13 @@ class Agent:
         seen: set[str] = set()
         for spec in source_specs_for_mode(self.inv.mode):
             limit = min(self.per_query, spec.max_limit)
-            for ev in spec.collector(query, limit=limit):
+            try:
+                results = list(spec.collector(query, limit=limit))
+                self.inv.record_source_run(spec.name, query, len(results))
+            except Exception as exc:
+                self.inv.record_source_run(spec.name, query, 0, error=f"{type(exc).__name__}: {exc}")
+                continue
+            for ev in results:
                 if ev.url not in seen:
                     seen.add(ev.url)
                     yield ev
