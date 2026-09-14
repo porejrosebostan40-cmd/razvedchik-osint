@@ -1,6 +1,6 @@
 from requests import RequestException
 from razvedchik.collectors import search_github
-from razvedchik.entities import page_entities, classify_identifier
+from razvedchik.entities import EntityGraph, page_entities, classify_identifier
 from razvedchik.extract import identifiers
 from razvedchik.models import Evidence, Investigation
 from razvedchik.normalize import phone_variants
@@ -59,6 +59,8 @@ def test_relation_graph_and_report_serialization():
     data = to_dict(inv)
     assert len(data["relations"]) == 1
     assert data["relations"][0]["evidence_ids"] == [eid]
+    assert data["coverage"]["queries_searched"] == 0
+    assert data["coverage"]["candidates_total"] == 1
 
 
 def test_entity_classification():
@@ -79,6 +81,17 @@ def test_entity_graph_keeps_sources_as_evidence_backed_edges():
     assert "email:test@example.org" in graph.entities
     assert "phone:79991234567" in graph.entities
     assert any(edge[0] == "username:@alpha_user" and edge[1] == "found_on" for edge in edges)
+
+
+def test_entity_graph_merge_preserves_evidence():
+    first = EntityGraph()
+    second = EntityGraph()
+    first.add("username", "@alpha_user", "evidence-1")
+    second.add("username", "@alpha_user", "evidence-2")
+    second.add("email", "test@example.org", "evidence-2")
+    first.merge(second)
+    assert first.entities["username:@alpha_user"].evidence_ids == {"evidence-1", "evidence-2"}
+    assert "email:test@example.org" in first.entities
 
 
 def test_entity_graph_does_not_create_identity_claim():
