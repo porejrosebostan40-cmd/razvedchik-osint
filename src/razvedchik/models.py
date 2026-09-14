@@ -21,6 +21,22 @@ class Evidence:
 
 
 @dataclass
+class Relation:
+    left: str
+    relation: str
+    right: str
+    evidence_ids: set[str] = field(default_factory=set)
+
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            "left": self.left,
+            "relation": self.relation,
+            "right": self.right,
+            "evidence_ids": sorted(self.evidence_ids),
+        }
+
+
+@dataclass
 class Candidate:
     key: str
     labels: set[str] = field(default_factory=set)
@@ -51,12 +67,22 @@ class Investigation:
     waves: int = 0
     evidence: dict[str, Evidence] = field(default_factory=dict)
     candidates: dict[str, Candidate] = field(default_factory=dict)
+    relations: list[Relation] = field(default_factory=list)
     searched: set[str] = field(default_factory=set)
     queue: list[str] = field(default_factory=list)
 
     def add_evidence(self, item: Evidence) -> str:
         self.evidence[item.evidence_id] = item
         return item.evidence_id
+
+    def add_relation(self, left: str, relation: str, right: str, evidence_id: str) -> None:
+        if not left or not right or left == right:
+            return
+        for existing in self.relations:
+            if existing.left == left and existing.relation == relation and existing.right == right:
+                existing.evidence_ids.add(evidence_id)
+                return
+        self.relations.append(Relation(left, relation, right, {evidence_id}))
 
     def add_candidate(self, key: str, label: str, identifiers: set[str], evidence_ids: set[str], domains: set[str] | None = None, sources: set[str] | None = None) -> Candidate:
         candidate = self.candidates.setdefault(key, Candidate(key=key))
