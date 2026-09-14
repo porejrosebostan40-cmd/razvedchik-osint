@@ -12,6 +12,7 @@ def to_dict(inv: Investigation) -> dict:
         "searched_queries": sorted(inv.searched),
         "evidence": [asdict(x) | {"evidence_id": x.evidence_id} for x in inv.evidence.values()],
         "candidates": [c.to_dict() for c in sorted(inv.candidates.values(), key=lambda x: x.score, reverse=True)],
+        "relations": [r.to_dict() for r in inv.relations],
     }
 
 
@@ -23,8 +24,11 @@ def write_reports(inv: Investigation, directory: str = "reports") -> tuple[str, 
     json_path.write_text(json.dumps(data, ensure_ascii=False, indent=2), encoding="utf-8")
     lines = [f"# Разведчик: {inv.query}", "", f"Режим: {inv.mode}", f"Волн: {inv.waves}", "", "## Кандидаты"]
     for c in sorted(inv.candidates.values(), key=lambda x: x.score, reverse=True):
-        lines += [f"### {c.key}", f"- Оценка: {c.score:.1f}", f"- Идентификаторы: {', '.join(sorted(c.identifiers)) or 'нет'}", f"- Метки: {', '.join(sorted(c.labels)) or 'нет'}", ""]
-    lines += ["## Источники", ""]
+        lines += [f"### {c.key}", f"- Статус: {c.status}", f"- Оценка: {c.score:.1f}", f"- Идентификаторы: {', '.join(sorted(c.identifiers)) or 'нет'}", f"- Источники: {', '.join(sorted(c.sources)) or 'нет'}", f"- Домены: {', '.join(sorted(c.domains)) or 'нет'}", ""]
+    lines += ["## Граф связей", ""]
+    for r in inv.relations:
+        lines.append(f"- `{r.left}` — **{r.relation}** — `{r.right}`; доказательства: {', '.join(sorted(r.evidence_ids))}")
+    lines += ["", "## Источники", ""]
     for e in inv.evidence.values():
         lines += [f"- [{e.title}]({e.url}) — {e.source}; запрос: `{e.query}`; уверенность: {e.confidence}", f"  {e.snippet}"]
     md_path.write_text("\n".join(lines), encoding="utf-8")
