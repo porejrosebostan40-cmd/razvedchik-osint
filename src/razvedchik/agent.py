@@ -12,8 +12,7 @@ class Agent:
         self.per_query = per_query
 
     def run(self) -> Investigation:
-        seeds = expand_queries(self.inv.mode, self.inv.query)
-        self.inv.queue.extend(seeds)
+        self.inv.queue.extend(expand_queries(self.inv.mode, self.inv.query))
         for wave in range(1, self.max_waves + 1):
             self.inv.waves = wave
             current = []
@@ -28,9 +27,8 @@ class Agent:
                 for ev in search_web(q, limit=self.per_query):
                     eid = self.inv.add_evidence(ev)
                     ids = identifiers(f"{ev.title} {ev.snippet}")
-                    if ids:
-                        key = "|".join(sorted(ids)[:3])
-                        self.inv.add_candidate(key, ev.title, ids, {eid})
+                    key = "|".join(sorted(ids)[:3]) if ids else f"seed:{self.inv.query}"
+                    self.inv.add_candidate(key, ev.title, ids, {eid})
             known = sorted({i for c in self.inv.candidates.values() for i in c.identifiers})
             planned = ai_queries(self.inv.mode, self.inv.query, known) or deterministic_queries(self.inv.mode, self.inv.query, known)
             for q in planned:
