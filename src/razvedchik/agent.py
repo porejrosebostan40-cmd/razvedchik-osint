@@ -1,3 +1,4 @@
+from .collectors import search_github
 from .extract import identifiers, domain
 from .models import Investigation
 from .normalize import expand_queries
@@ -10,6 +11,18 @@ class Agent:
         self.inv = Investigation(mode=mode, query=query)
         self.max_waves = max_waves
         self.per_query = per_query
+
+    def _collect(self, query: str):
+        """Combine generic web search with a public GitHub search branch."""
+        seen: set[str] = set()
+        for ev in search_web(query, limit=self.per_query):
+            if ev.url not in seen:
+                seen.add(ev.url)
+                yield ev
+        for ev in search_github(query, limit=min(self.per_query, 6)):
+            if ev.url not in seen:
+                seen.add(ev.url)
+                yield ev
 
     def run(self) -> Investigation:
         self.inv.queue.extend(expand_queries(self.inv.mode, self.inv.query))
@@ -24,7 +37,7 @@ class Agent:
             if not current:
                 break
             for q in current:
-                for ev in search_web(q, limit=self.per_query):
+                for ev in self._collect(q):
                     eid = self.inv.add_evidence(ev)
                     ids = identifiers(f"{ev.title} {ev.snippet}")
                     dom = {domain(ev.url)} - {""}
