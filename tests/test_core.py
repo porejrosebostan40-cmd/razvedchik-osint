@@ -58,15 +58,13 @@ def test_github_collector_handles_api_failure(monkeypatch):
     class Failed:
         def get(self, *args, **kwargs):
             raise RequestException("network")
-
     monkeypatch.setattr("razvedchik.collectors.requests", Failed())
     assert search_github("example") == []
 
 
 def test_gitlab_collector_parses_public_user(monkeypatch):
     class Response:
-        def raise_for_status(self):
-            return None
+        def raise_for_status(self): return None
         def json(self):
             return [{"username": "alpha", "name": "Alpha Example", "web_url": "https://gitlab.com/alpha", "public_email": "alpha@example.org"}]
     class Client:
@@ -111,7 +109,17 @@ def test_wikidata_collector_parses_public_person(monkeypatch):
     class Response:
         def raise_for_status(self): return None
         def json(self):
-            return {"results": {"bindings": [{"item": {"value": "https://www.wikidata.org/entity/Q1"}, "itemLabel": {"value": "Alpha Example"}, "birth": {"value": "1981-12-18T00:00:00Z"}]}}
+            return {
+                "results": {
+                    "bindings": [
+                        {
+                            "item": {"value": "https://www.wikidata.org/entity/Q1"},
+                            "itemLabel": {"value": "Alpha Example"},
+                            "birth": {"value": "1981-12-18T00:00:00Z"},
+                        }
+                    ]
+                }
+            }
     class Client:
         def get(self, *args, **kwargs): return Response()
     monkeypatch.setattr("razvedchik.collectors.requests", Client())
