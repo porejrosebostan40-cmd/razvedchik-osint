@@ -77,6 +77,8 @@ class Investigation:
     searched: set[str] = field(default_factory=set)
     queue: list[str] = field(default_factory=list)
     source_runs: dict[str, dict[str, Any]] = field(default_factory=dict)
+    phone_links: list[dict[str, Any]] = field(default_factory=list)
+    phone_conflict: bool = False
 
     def add_evidence(self, item: Evidence) -> str:
         self.evidence[item.evidence_id] = item
