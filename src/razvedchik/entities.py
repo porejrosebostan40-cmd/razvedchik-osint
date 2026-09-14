@@ -30,6 +30,11 @@ class EntityGraph:
         entity.evidence_ids.add(evidence_id)
         return key
 
+    def merge(self, other: "EntityGraph") -> None:
+        for key, incoming in other.entities.items():
+            current = self.entities.setdefault(key, Entity(incoming.key, incoming.kind, incoming.value))
+            current.evidence_ids.update(incoming.evidence_ids)
+
     def to_dict(self) -> list[dict]:
         return [e.to_dict() for e in sorted(self.entities.values(), key=lambda x: (x.kind, x.value.lower()))]
 
@@ -59,7 +64,6 @@ def page_entities(title: str, snippet: str, url: str, identifiers: set[str], evi
         for key in identifier_keys:
             edges.append((key, "found_on", domain_key))
 
-    # Preserve the page title as a searchable label, but do not infer identity from it.
     label = re.sub(r"\s+", " ", title).strip()
     if label:
         label_key = graph.add("page", label[:240], evidence_id)
