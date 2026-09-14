@@ -51,6 +51,7 @@ def search_sherlock(username: str, limit: int = 20, timeout: int = 15) -> list[E
     if (
         not executable
         or not clean
+        or clean.startswith("-")
         or any(ch.isspace() for ch in clean)
         or "@" in clean
         or clean.isdigit()
@@ -58,7 +59,7 @@ def search_sherlock(username: str, limit: int = 20, timeout: int = 15) -> list[E
         return []
     try:
         completed = subprocess.run(
-            [executable, clean, "--print-found", "--no-color", "--timeout", str(timeout)],
+            [executable, "--print-found", "--no-color", "--timeout", str(timeout), "--", clean],
             capture_output=True,
             text=True,
             timeout=max(timeout + 10, 30),
