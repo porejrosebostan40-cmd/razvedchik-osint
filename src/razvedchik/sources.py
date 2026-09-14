@@ -1,7 +1,7 @@
 from dataclasses import dataclass
 from collections.abc import Callable
 
-from .collectors import search_github, search_gitlab, search_sherlock, search_stackexchange, search_wikidata
+from .collectors import search_github, search_gitlab, search_openalex, search_sherlock, search_stackexchange, search_wikidata
 from .models import Evidence
 from .search import search_web
 
@@ -20,6 +20,7 @@ SOURCE_SPECS = (
     SourceSpec("GitHub public search", search_github, frozenset({"fio", "username", "nickname", "phone", "email", "combined"}), max_limit=10),
     SourceSpec("GitLab public user search", search_gitlab, frozenset({"fio", "email", "username", "nickname", "combined"}), max_limit=10),
     SourceSpec("Stack Overflow public user search", search_stackexchange, frozenset({"fio", "email", "username", "nickname", "combined"}), max_limit=10),
+    SourceSpec("OpenAlex public author search", search_openalex, frozenset({"fio", "combined"}), max_limit=10),
     SourceSpec("Wikidata public knowledge base", search_wikidata, frozenset({"fio", "combined"}), max_limit=10),
     SourceSpec("Sherlock public username search (optional bridge)", search_sherlock, frozenset({"username", "nickname", "combined"}), optional_bridge=True, max_limit=20),
 )
