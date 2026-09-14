@@ -13,7 +13,7 @@ URL_RE = re.compile(r"https?://[^\s<>\"']+")
 
 
 def search_github(query: str, limit: int = 6, timeout: int = 10) -> list[Evidence]:
-    """Search only public GitHub users/repos; never accesses private data."""
+    """Search only public GitHub users; never accesses private data."""
     try:
         response = requests.get(
             f"{API}/search/users",
@@ -36,7 +36,7 @@ def search_github(query: str, limit: int = 6, timeout: int = 10) -> list[Evidenc
             source="GitHub public search",
             url=url,
             title=f"GitHub user: {login}",
-            snippet=f"Public GitHub account matching query: {query}",
+            snippet=f"Public GitHub account matching query: @{login}; search seed: {query}",
             query=query,
             kind="github-user",
             confidence="found mention",
@@ -81,7 +81,7 @@ def search_sherlock(username: str, limit: int = 20, timeout: int = 15) -> list[E
             source="Sherlock public username search",
             url=url,
             title=f"Sherlock profile: {clean}",
-            snippet=f"Public profile URL found for username {clean}",
+            snippet=f"Public profile URL found for username @{clean}",
             query=username,
             kind="sherlock-profile",
             confidence="found mention",
