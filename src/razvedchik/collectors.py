@@ -1,4 +1,5 @@
 import requests
+from requests import RequestException
 from .models import Evidence
 
 
@@ -17,7 +18,7 @@ def search_github(query: str, limit: int = 6, timeout: int = 10) -> list[Evidenc
         )
         response.raise_for_status()
         items = response.json().get("items", [])
-    except (requests.RequestException, ValueError):
+    except (RequestException, ValueError):
         return []
 
     out: list[Evidence] = []
