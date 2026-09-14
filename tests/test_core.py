@@ -3,6 +3,7 @@ from razvedchik.collectors import search_github
 from razvedchik.extract import identifiers
 from razvedchik.models import Evidence, Investigation
 from razvedchik.normalize import phone_variants
+from razvedchik.report import to_dict
 
 
 def test_identifier_extraction():
@@ -46,3 +47,14 @@ def test_github_collector_handles_api_failure(monkeypatch):
 
     monkeypatch.setattr("razvedchik.collectors.requests", Failed())
     assert search_github("example") == []
+
+
+def test_relation_graph_and_report_serialization():
+    inv = Investigation(mode="combined", query="Test Person")
+    ev = Evidence("web", "https://example.org", "Result", "@alpha_user test@example.org", "query")
+    eid = inv.add_evidence(ev)
+    inv.add_candidate("candidate", "Result", {"@alpha_user", "test@example.org"}, {eid}, {"example.org"}, {"web"})
+    inv.add_relation("@alpha_user", "co-occurs in source", "test@example.org", eid)
+    data = to_dict(inv)
+    assert len(data["relations"]) == 1
+    assert data["relations"][0]["evidence_ids"] == [eid]
