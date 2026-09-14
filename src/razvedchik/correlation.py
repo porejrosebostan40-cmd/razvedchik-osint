@@ -1,5 +1,4 @@
 from dataclasses import dataclass, field
-import re
 
 from .models import Candidate, Evidence, Investigation
 
@@ -12,18 +11,25 @@ ROLE_UNKNOWN = "unknown relationship"
 @dataclass
 class PhoneLink:
     candidate_key: str
-    role: str = ROLE_UNKNOWN
+    roles: set[str] = field(default_factory=set)
     score: float = 0.0
     evidence_ids: set[str] = field(default_factory=set)
     reasons: list[str] = field(default_factory=list)
 
+    @property
+    def role(self) -> str:
+        if not self.roles:
+            return ROLE_UNKNOWN
+        return ", ".join(sorted(self.roles))
+
     def to_dict(self) -> dict:
         return {
             "candidate_key": self.candidate_key,
+            "roles": sorted(self.roles),
             "role": self.role,
             "score": round(self.score, 3),
             "evidence_ids": sorted(self.evidence_ids),
-            "reasons": list(self.reasons),
+            "reasons": list(dict.fromkeys(self.reasons)),
         }
 
 
@@ -38,13 +44,6 @@ def _role_from_evidence(evidence: Evidence) -> tuple[str, str] | None:
     if "de-facto" in kind or "user" in kind or "contact-label" in kind:
         return ROLE_DE_FACTO, "Источник помечает связь как фактическое использование."
     return None
-
-
-def _name_tokens(candidate: Candidate) -> set[str]:
-    tokens: set[str] = set()
-    for label in candidate.labels:
-        tokens.update(x.lower() for x in re.findall(r"[A-Za-zА-Яа-яЁё-]{3,}", label))
-    return tokens
 
 
 def correlate_phone(inv: Investigation, phone: str) -> list[PhoneLink]:
@@ -62,19 +61,18 @@ def correlate_phone(inv: Investigation, phone: str) -> list[PhoneLink]:
             role = _role_from_evidence(evidence)
             if role:
                 role_name, reason = role
-                if link.role == ROLE_UNKNOWN:
-                    link.role = role_name
-                    link.reasons.append(reason)
-                elif link.role != role_name:
-                    link.role = ROLE_UNKNOWN
-                    link.reasons.append("Источники указывают разные типы связи; автоматическое назначение роли запрещено.")
+                link.roles.add(role_name)
+                link.reasons.append(reason)
             else:
                 link.reasons.append("Найдено упоминание номера; само по себе оно не доказывает владельца или фактического пользователя.")
         link.score = min(100.0, len(link.evidence_ids) * 8.0 + len(candidate.domains) * 4.0 + len(candidate.sources) * 4.0)
+        if not link.roles:
+            link.roles.add(ROLE_UNKNOWN)
 
     return sorted(links.values(), key=lambda x: (-x.score, x.candidate_key))
 
 
 def phone_conflicts(links: list[PhoneLink]) -> bool:
-    roles = {link.role for link in links}
-    return ROLE_DE_JURE in roles and ROLE_DE_FACTO in roles
+    de_jure_keys = {link.candidate_key for link in links if ROLE_DE_JURE in link.roles}
+    de_facto_keys = {link.candidate_key for link in links if ROLE_DE_FACTO in link.roles}
+    return bool(de_jure_keys and de_facto_keys and de_jure_keys != de_facto_keys)
