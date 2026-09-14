@@ -4,12 +4,32 @@ from pathlib import Path
 from .models import Investigation
 
 
+def coverage_summary(inv: Investigation) -> dict:
+    source_names = {item.source for item in inv.evidence.values()}
+    domains = {domain for candidate in inv.candidates.values() for domain in candidate.domains}
+    identifiers = {identifier for candidate in inv.candidates.values() for identifier in candidate.identifiers}
+    confirmed = sum(candidate.status == "confirmed by source" for candidate in inv.candidates.values())
+    return {
+        "waves_completed": inv.waves,
+        "queries_searched": len(inv.searched),
+        "queries_pending": len(inv.queue),
+        "evidence_items": len(inv.evidence),
+        "source_types": sorted(source_names),
+        "domains_observed": len(domains),
+        "identifiers_observed": len(identifiers),
+        "candidates_total": len(inv.candidates),
+        "candidates_confirmed_by_source": confirmed,
+        "coverage_note": "Coverage is bounded by configured collectors, public-source visibility, search-engine results, and investigation limits.",
+    }
+
+
 def to_dict(inv: Investigation) -> dict:
     return {
         "mode": inv.mode,
         "query": inv.query,
         "waves": inv.waves,
         "stop_reason": inv.stop_reason,
+        "coverage": coverage_summary(inv),
         "searched_queries": sorted(inv.searched),
         "evidence": [asdict(x) | {"evidence_id": x.evidence_id} for x in inv.evidence.values()],
         "candidates": [c.to_dict() for c in sorted(inv.candidates.values(), key=lambda x: x.score, reverse=True)],
@@ -24,7 +44,26 @@ def write_reports(inv: Investigation, directory: str = "reports") -> tuple[str, 
     json_path = Path(directory) / "investigation.json"
     md_path = Path(directory) / "investigation.md"
     json_path.write_text(json.dumps(data, ensure_ascii=False, indent=2), encoding="utf-8")
-    lines = [f"# Разведчик: {inv.query}", "", f"Режим: {inv.mode}", f"Волн: {inv.waves}", f"Причина остановки: {inv.stop_reason}", "", "## Кандидаты"]
+    coverage = data["coverage"]
+    lines = [
+        f"# Разведчик: {inv.query}",
+        "",
+        f"Режим: {inv.mode}",
+        f"Волн: {inv.waves}",
+        f"Причина остановки: {inv.stop_reason}",
+        "",
+        "## Покрытие расследования",
+        f"- Запросов проверено: {coverage['queries_searched']}",
+        f"- Доказательств собрано: {coverage['evidence_items']}",
+        f"- Доменов обнаружено: {coverage['domains_observed']}",
+        f"- Идентификаторов обнаружено: {coverage['identifiers_observed']}",
+        f"- Кандидатов: {coverage['candidates_total']}; подтверждено источниками: {coverage['candidates_confirmed_by_source']}",
+        f"- Источники: {', '.join(coverage['source_types']) or 'нет'}",
+        f"- В очереди осталось: {coverage['queries_pending']}",
+        f"- Ограничение покрытия: {coverage['coverage_note']}",
+        "",
+        "## Кандидаты",
+    ]
     for c in sorted(inv.candidates.values(), key=lambda x: x.score, reverse=True):
         lines += [f"### {c.key}", f"- Статус: {c.status}", f"- Оценка: {c.score:.1f}", f"- Идентификаторы: {', '.join(sorted(c.identifiers)) or 'нет'}", f"- Источники: {', '.join(sorted(c.sources)) or 'нет'}", f"- Домены: {', '.join(sorted(c.domains)) or 'нет'}", ""]
     lines += ["## Сущности", ""]
