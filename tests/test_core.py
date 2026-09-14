@@ -1,3 +1,4 @@
+from requests import RequestException
 from razvedchik.collectors import search_github
 from razvedchik.extract import identifiers
 from razvedchik.models import Evidence, Investigation
@@ -31,7 +32,7 @@ def test_candidate_confidence_progression():
 def test_github_collector_handles_api_failure(monkeypatch):
     class Failed:
         def get(self, *args, **kwargs):
-            raise RuntimeError("network")
+            raise RequestException("network")
 
     monkeypatch.setattr("razvedchik.collectors.requests", Failed())
     assert search_github("example") == []
