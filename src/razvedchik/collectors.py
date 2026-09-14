@@ -8,7 +8,9 @@ from .models import Evidence
 
 
 API = "https://api.github.com"
-HEADERS = {"Accept": "application/vnd.github+json", "User-Agent": "Razvedchik/0.2"}
+GITLAB_API = "https://gitlab.com/api/v4"
+WIKIDATA_API = "https://query.wikidata.org/sparql"
+HEADERS = {"Accept": "application/json", "User-Agent": "Razvedchik/0.3"}
 URL_RE = re.compile(r"https?://[^\s<>\"']+")
 
 
@@ -39,6 +41,100 @@ def search_github(query: str, limit: int = 6, timeout: int = 10) -> list[Evidenc
             snippet=f"Public GitHub account matching query: @{login}; search seed: {query}",
             query=query,
             kind="github-user",
+            confidence="found mention",
+        ))
+    return out
+
+
+def search_gitlab(query: str, limit: int = 6, timeout: int = 10) -> list[Evidence]:
+    """Search public GitLab users through GitLab's unauthenticated users endpoint."""
+    clean = query.strip().lstrip("@")
+    if not clean or clean.startswith("-"):
+        return []
+    try:
+        response = requests.get(
+            f"{GITLAB_API}/users",
+            params={"search": clean, "per_page": min(limit, 10)},
+            headers=HEADERS,
+            timeout=timeout,
+        )
+        response.raise_for_status()
+        items = response.json()
+    except (RequestException, ValueError):
+        return []
+
+    out: list[Evidence] = []
+    for item in items:
+        username = item.get("username", "")
+        name = item.get("name", "")
+        url = item.get("web_url", "")
+        if not username or not url:
+            continue
+        public_email = item.get("public_email") or ""
+        details = f"Public GitLab user @{username}"
+        if name:
+            details += f"; name: {name}"
+        if public_email:
+            details += f"; public email: {public_email}"
+        details += f"; search seed: {query}"
+        out.append(Evidence(
+            source="GitLab public user search",
+            url=url,
+            title=f"GitLab user: {username}" + (f" — {name}" if name else ""),
+            snippet=details,
+            query=query,
+            kind="gitlab-user",
+            confidence="found mention",
+        ))
+    return out
+
+
+def search_wikidata(query: str, limit: int = 6, timeout: int = 15) -> list[Evidence]:
+    """Search exact human-name labels in public Wikidata."""
+    clean = " ".join(query.strip().split())
+    if not clean or len(clean) > 160 or '"' in clean or "\\" in clean:
+        return []
+    escaped = clean.replace("'", "\\'")
+    sparql = f"""
+SELECT ?item ?itemLabel ?birth WHERE {{
+  ?item wdt:P31 wd:Q5;
+        rdfs:label ?label.
+  FILTER(LANG(?label) = "ru" || LANG(?label) = "en")
+  FILTER(STR(?label) = '{escaped}')
+  OPTIONAL {{ ?item wdt:P569 ?birth. }}
+  SERVICE wikibase:label {{ bd:serviceParam wikibase:language "ru,en". }}
+}}
+LIMIT {min(limit, 10)}
+"""
+    try:
+        response = requests.get(
+            WIKIDATA_API,
+            params={"query": sparql, "format": "json"},
+            headers={"Accept": "application/sparql-results+json", "User-Agent": HEADERS["User-Agent"]},
+            timeout=timeout,
+        )
+        response.raise_for_status()
+        bindings = response.json().get("results", {}).get("bindings", [])
+    except (RequestException, ValueError):
+        return []
+
+    out: list[Evidence] = []
+    for row in bindings:
+        item = row.get("item", {}).get("value", "")
+        label = row.get("itemLabel", {}).get("value", clean)
+        birth = row.get("birth", {}).get("value", "")
+        if not item:
+            continue
+        snippet = f"Public Wikidata human entity: {label}; seed: {query}"
+        if birth:
+            snippet += f"; birth: {birth[:10]}"
+        out.append(Evidence(
+            source="Wikidata public knowledge base",
+            url=item,
+            title=f"Wikidata: {label}",
+            snippet=snippet,
+            query=query,
+            kind="wikidata-person",
             confidence="found mention",
         ))
     return out
