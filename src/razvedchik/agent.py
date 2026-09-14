@@ -24,6 +24,23 @@ class Agent:
                 seen.add(ev.url)
                 yield ev
 
+    def _record(self, query: str, ev) -> None:
+        eid = self.inv.add_evidence(ev)
+        text = f"{ev.title} {ev.snippet}"
+        ids = identifiers(text)
+        dom = {domain(ev.url)} - {""}
+        key = "|".join(sorted(ids)[:3]) if ids else f"seed:{self.inv.query}"
+        self.inv.add_candidate(key, ev.title, ids, {eid}, dom, {ev.source})
+        ordered = sorted(ids)
+        for left in ordered:
+            for right in ordered:
+                if left < right:
+                    self.inv.add_relation(left, "co-occurs in source", right, eid)
+        for ident in ordered:
+            for pivot in (ident, f'"{ident}"'):
+                if pivot not in self.inv.searched and pivot not in self.inv.queue:
+                    self.inv.queue.append(pivot)
+
     def run(self) -> Investigation:
         self.inv.queue.extend(expand_queries(self.inv.mode, self.inv.query))
         for wave in range(1, self.max_waves + 1):
@@ -38,15 +55,7 @@ class Agent:
                 break
             for q in current:
                 for ev in self._collect(q):
-                    eid = self.inv.add_evidence(ev)
-                    ids = identifiers(f"{ev.title} {ev.snippet}")
-                    dom = {domain(ev.url)} - {""}
-                    key = "|".join(sorted(ids)[:3]) if ids else f"seed:{self.inv.query}"
-                    self.inv.add_candidate(key, ev.title, ids, {eid}, dom, {ev.source})
-                    for ident in sorted(ids):
-                        for pivot in (ident, f'"{ident}"'):
-                            if pivot not in self.inv.searched and pivot not in self.inv.queue:
-                                self.inv.queue.append(pivot)
+                    self._record(q, ev)
             known = sorted({i for c in self.inv.candidates.values() for i in c.identifiers})
             planned = ai_queries(self.inv.mode, self.inv.query, known) or deterministic_queries(self.inv.mode, self.inv.query, known)
             for q in planned:
