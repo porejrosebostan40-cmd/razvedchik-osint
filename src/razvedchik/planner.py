@@ -16,13 +16,14 @@ def _response_text(data: dict) -> str:
     return "\n".join(chunks)
 
 
-def ai_queries(mode: str, query: str, known: list[str]) -> list[str]:
+def ai_queries(mode: str, query: str, known: list[str], evidence_context: list[str] | None = None) -> list[str]:
     key = os.getenv("OPENAI_API_KEY")
     if not key:
         return []
+    context = "\n".join(str(item).replace("\n", " ")[:280] for item in (evidence_context or [])[-8:])
     payload = {
         "model": os.getenv("OPENAI_MODEL", "gpt-5.6-luna"),
-        "input": f"Mode: {mode}\nSeed: {query}\nKnown identifiers: {known}\nReturn JSON only.",
+        "input": f"Mode: {mode}\nSeed: {query}\nKnown identifiers: {known}\nRecent evidence:\n{context}\nReturn JSON only.",
         "instructions": SYSTEM,
     }
     try:
