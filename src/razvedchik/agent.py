@@ -30,7 +30,7 @@ class Agent:
         text = f"{ev.title} {ev.snippet}"
         ids = identifiers(text)
         dom = {domain(ev.url)} - {""}
-        key = "|".join(sorted(ids)[:3]) if ids else f"seed:{self.inv.query}"
+        key = "|".join(sorted(ids)[:3]) if ids else f"evidence:{eid}"
         self.inv.add_candidate(key, ev.title, ids, {eid}, dom, {ev.source})
 
         graph, edges = page_entities(ev.title, ev.snippet, ev.url, ids, eid)
