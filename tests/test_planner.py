@@ -26,6 +26,29 @@ def test_ai_planner_accepts_valid_json(monkeypatch):
     assert ai_queries("username", "alpha", []) == ["alpha profile", "alpha github"]
 
 
+def test_ai_planner_includes_only_bounded_recent_context(monkeypatch):
+    captured = {}
+
+    class Response:
+        def raise_for_status(self):
+            return None
+
+        def json(self):
+            return {"output_text": '{"queries": ["next step"]}'}
+
+    def post(*args, **kwargs):
+        captured["input"] = kwargs["json"]["input"]
+        return Response()
+
+    monkeypatch.setenv("OPENAI_API_KEY", "test-key")
+    monkeypatch.setattr("razvedchik.planner.requests.post", post)
+    context = [f"source-{i} | title-{i} | {'x' * 500}" for i in range(12)]
+    assert ai_queries("username", "alpha", ["@alpha"], context) == ["next step"]
+    assert "source-11" in captured["input"]
+    assert "source-3" not in captured["input"]
+    assert len(captured["input"]) < 3000
+
+
 def test_ai_planner_fails_closed_on_invalid_json(monkeypatch):
     class Response:
         def raise_for_status(self):
