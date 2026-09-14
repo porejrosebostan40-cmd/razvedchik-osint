@@ -29,6 +29,22 @@ def test_phone_owner_and_actual_user_remain_separate():
     assert phone_conflicts(links)
 
 
+def test_one_person_can_be_both_owner_and_user():
+    inv = Investigation(mode="phone", query="79991234567")
+    ev1 = Evidence("Source A", "https://example.org/a", "Александр Иванов", "79991234567 зарегистрирован на Александра Иванова", "79991234567", kind="phone-owner")
+    ev2 = Evidence("Source B", "https://example.net/b", "Александр Иванов", "79991234567 контакт Александр Иванов", "79991234567", kind="phone-user")
+    eids = []
+    for ev in (ev1, ev2):
+        eid = inv.add_evidence(ev)
+        eids.append(eid)
+    inv.add_candidate("alex", "Александр Иванов", {"79991234567"}, set(eids), {"example.org", "example.net"}, {"Source A", "Source B"})
+
+    links = correlate_phone(inv, "79991234567")
+    assert len(links) == 1
+    assert set(links[0].roles) == {ROLE_DE_JURE, ROLE_DE_FACTO}
+    assert not phone_conflicts(links)
+
+
 def test_phone_mention_does_not_become_owner_or_user():
     inv = Investigation(mode="phone", query="79991234567")
     ev = Evidence(
