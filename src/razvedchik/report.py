@@ -12,6 +12,7 @@ def to_dict(inv: Investigation) -> dict:
         "searched_queries": sorted(inv.searched),
         "evidence": [asdict(x) | {"evidence_id": x.evidence_id} for x in inv.evidence.values()],
         "candidates": [c.to_dict() for c in sorted(inv.candidates.values(), key=lambda x: x.score, reverse=True)],
+        "entities": inv.entity_graph.to_dict(),
         "relations": [r.to_dict() for r in inv.relations],
     }
 
@@ -25,7 +26,10 @@ def write_reports(inv: Investigation, directory: str = "reports") -> tuple[str, 
     lines = [f"# Разведчик: {inv.query}", "", f"Режим: {inv.mode}", f"Волн: {inv.waves}", "", "## Кандидаты"]
     for c in sorted(inv.candidates.values(), key=lambda x: x.score, reverse=True):
         lines += [f"### {c.key}", f"- Статус: {c.status}", f"- Оценка: {c.score:.1f}", f"- Идентификаторы: {', '.join(sorted(c.identifiers)) or 'нет'}", f"- Источники: {', '.join(sorted(c.sources)) or 'нет'}", f"- Домены: {', '.join(sorted(c.domains)) or 'нет'}", ""]
-    lines += ["## Граф связей", ""]
+    lines += ["## Сущности", ""]
+    for entity in inv.entity_graph.entities.values():
+        lines.append(f"- `{entity.kind}`: `{entity.value}`; доказательства: {', '.join(sorted(entity.evidence_ids))}")
+    lines += ["", "## Граф связей", ""]
     for r in inv.relations:
         lines.append(f"- `{r.left}` — **{r.relation}** — `{r.right}`; доказательства: {', '.join(sorted(r.evidence_ids))}")
     lines += ["", "## Источники", ""]
