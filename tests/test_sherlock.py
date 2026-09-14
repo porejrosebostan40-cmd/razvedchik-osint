@@ -22,3 +22,8 @@ def test_sherlock_collector_parses_public_profile_urls(monkeypatch):
 def test_sherlock_collector_rejects_email_like_input(monkeypatch):
     monkeypatch.setattr("razvedchik.collectors.shutil.which", lambda name: "/usr/bin/sherlock")
     assert search_sherlock("person@example.org") == []
+
+
+def test_sherlock_collector_rejects_phone_like_input(monkeypatch):
+    monkeypatch.setattr("razvedchik.collectors.shutil.which", lambda name: "/usr/bin/sherlock")
+    assert search_sherlock("79991234567") == []
