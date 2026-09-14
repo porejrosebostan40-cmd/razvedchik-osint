@@ -4,7 +4,7 @@ from razvedchik.entities import EntityGraph, page_entities, classify_identifier
 from razvedchik.extract import identifiers
 from razvedchik.models import Evidence, Investigation
 from razvedchik.normalize import phone_variants
-from razvedchik.report import to_dict
+from razvedchik.report import configured_collectors, to_dict
 
 
 def test_identifier_extraction():
@@ -61,6 +61,12 @@ def test_relation_graph_and_report_serialization():
     assert data["relations"][0]["evidence_ids"] == [eid]
     assert data["coverage"]["queries_searched"] == 0
     assert data["coverage"]["candidates_total"] == 1
+    assert data["coverage"]["configured_collectors"][-1] == "Sherlock public username search"
+
+
+def test_configured_collectors_are_mode_aware():
+    assert configured_collectors(Investigation(mode="fio", query="x")) == ["web search", "GitHub public search"]
+    assert "Sherlock public username search" in configured_collectors(Investigation(mode="username", query="x"))
 
 
 def test_entity_classification():
