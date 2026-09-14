@@ -39,7 +39,7 @@ class Agent:
         self.inv.add_candidate(key, ev.title, ids, {eid}, dom, {ev.source})
 
         graph, edges = page_entities(ev.title, ev.snippet, ev.url, ids, eid)
-        self.inv.entity_graph.entities.update(graph.entities)
+        self.inv.entity_graph.merge(graph)
         for left, relation, right in edges:
             self.inv.add_relation(left, relation, right, eid)
 
