@@ -138,11 +138,14 @@ def test_relation_graph_and_report_serialization():
     eid = inv.add_evidence(ev)
     inv.add_candidate("candidate", "Result", {"@alpha_user", "test@example.org"}, {eid}, {"example.org"}, {"web"})
     inv.add_relation("@alpha_user", "co-occurs in source", "test@example.org", eid)
+    inv.record_source_run("web", "query", 1)
     data = to_dict(inv)
     assert len(data["relations"]) == 1
     assert data["relations"][0]["evidence_ids"] == [eid]
     assert data["coverage"]["queries_searched"] == 0
     assert data["coverage"]["candidates_total"] == 1
+    assert data["coverage"]["source_attempts"] == 1
+    assert data["coverage"]["source_successes"] == 1
     assert "GitLab public user search" in data["coverage"]["direct_source_collectors"]
     assert "Stack Overflow public user search" in data["coverage"]["direct_source_collectors"]
     assert "Wikidata public knowledge base" in data["coverage"]["direct_source_collectors"]
