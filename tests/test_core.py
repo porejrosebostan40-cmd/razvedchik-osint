@@ -3,7 +3,7 @@ from razvedchik.collectors import search_github
 from razvedchik.entities import EntityGraph, page_entities, classify_identifier
 from razvedchik.extract import identifiers
 from razvedchik.models import Evidence, Investigation
-from razvedchik.normalize import phone_variants
+from razvedchik.normalize import expand_queries, phone_variants
 from razvedchik.report import configured_collectors, to_dict
 
 
@@ -18,6 +18,19 @@ def test_phone_variants():
     values = phone_variants("8 (999) 123-45-67")
     assert "+79991234567" in values
     assert "79991234567" in values
+
+
+def test_fio_expansion_keeps_birth_year_as_context():
+    queries = expand_queries("fio", "Иванов Иван Иванович 1981")
+    assert '"Иванов Иван Иванович" 1981' in queries
+    assert "1" not in queries
+    assert "И И И" in queries
+
+
+def test_fio_expansion_supports_full_birth_date():
+    queries = expand_queries("fio", "Иванов Иван Иванович 18.12.1981")
+    assert '"Иванов Иван Иванович" 18.12.1981' in queries
+    assert "1" not in queries
 
 
 def test_candidate_needs_independent_sources():
