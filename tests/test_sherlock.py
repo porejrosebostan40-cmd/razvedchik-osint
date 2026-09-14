@@ -27,3 +27,8 @@ def test_sherlock_collector_rejects_email_like_input(monkeypatch):
 def test_sherlock_collector_rejects_phone_like_input(monkeypatch):
     monkeypatch.setattr("razvedchik.collectors.shutil.which", lambda name: "/usr/bin/sherlock")
     assert search_sherlock("79991234567") == []
+
+
+def test_sherlock_collector_rejects_option_like_input(monkeypatch):
+    monkeypatch.setattr("razvedchik.collectors.shutil.which", lambda name: "/usr/bin/sherlock")
+    assert search_sherlock("--help") == []
