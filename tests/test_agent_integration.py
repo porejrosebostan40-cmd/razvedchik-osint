@@ -2,26 +2,17 @@ import pytest
 
 from razvedchik.agent import Agent
 from razvedchik.models import Evidence
+from razvedchik.sources import SourceSpec
 
 
 def test_agent_records_entities_and_pivots(monkeypatch):
     agent = Agent("username", "alpha", max_waves=1, per_query=2)
 
-    monkeypatch.setattr(
-        "razvedchik.agent.search_web",
-        lambda query, limit=2: [
-            Evidence(
-                source="web",
-                url="https://example.org/profile",
-                title="Alpha profile",
-                snippet="Public page for @alpha with alpha@example.org",
-                query=query,
-            )
-        ],
-    )
-    monkeypatch.setattr("razvedchik.agent.search_github", lambda *a, **k: [])
-    monkeypatch.setattr("razvedchik.agent.search_gitlab", lambda *a, **k: [])
-    monkeypatch.setattr("razvedchik.agent.search_sherlock", lambda *a, **k: [])
+    def fake_web(query, limit=2):
+        return [Evidence("web", "https://example.org/profile", "Alpha profile", "Public page for @alpha with alpha@example.org", query)]
+
+    specs = [SourceSpec("web search", fake_web, frozenset({"username"}))]
+    monkeypatch.setattr("razvedchik.agent.source_specs_for_mode", lambda mode: specs)
     monkeypatch.setattr("razvedchik.agent.ai_queries", lambda *a, **k: [])
     monkeypatch.setattr("razvedchik.agent.deterministic_queries", lambda *a, **k: [])
 
