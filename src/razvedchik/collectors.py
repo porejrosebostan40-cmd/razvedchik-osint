@@ -9,6 +9,7 @@ from .models import Evidence
 
 API = "https://api.github.com"
 GITLAB_API = "https://gitlab.com/api/v4"
+STACK_API = "https://api.stackexchange.com/2.3/users"
 WIKIDATA_API = "https://query.wikidata.org/sparql"
 HEADERS = {"Accept": "application/json", "User-Agent": "Razvedchik/0.3"}
 URL_RE = re.compile(r"https?://[^\s<>\"']+")
@@ -84,6 +85,49 @@ def search_gitlab(query: str, limit: int = 6, timeout: int = 10) -> list[Evidenc
             snippet=details,
             query=query,
             kind="gitlab-user",
+            confidence="found mention",
+        ))
+    return out
+
+
+def search_stackexchange(query: str, limit: int = 6, timeout: int = 10) -> list[Evidence]:
+    """Search public Stack Overflow users by display name."""
+    clean = " ".join(query.strip().split())
+    if not clean or clean.startswith("-"):
+        return []
+    try:
+        response = requests.get(
+            STACK_API,
+            params={"site": "stackoverflow", "inname": clean, "pagesize": min(limit, 10)},
+            headers=HEADERS,
+            timeout=timeout,
+        )
+        response.raise_for_status()
+        items = response.json().get("items", [])
+    except (RequestException, ValueError):
+        return []
+
+    out: list[Evidence] = []
+    for item in items:
+        user_id = item.get("user_id")
+        name = item.get("display_name", "")
+        url = item.get("link", "")
+        if not user_id or not url:
+            continue
+        reputation = item.get("reputation")
+        snippet = f"Public Stack Overflow user: {name}; user_id: {user_id}; search seed: {query}"
+        if reputation is not None:
+            snippet += f"; reputation: {reputation}"
+        website = item.get("website_url") or ""
+        if website:
+            snippet += f"; website: {website}"
+        out.append(Evidence(
+            source="Stack Overflow public user search",
+            url=url,
+            title=f"Stack Overflow user: {name}",
+            snippet=snippet,
+            query=query,
+            kind="stackoverflow-user",
             confidence="found mention",
         ))
     return out
