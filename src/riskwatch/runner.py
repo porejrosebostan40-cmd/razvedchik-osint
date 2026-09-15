@@ -16,7 +16,7 @@ def _queries():
     regional=[]
     for r in REGIONS:
         for n,t in REGIONAL_TEMPLATES: regional.append((f"{n}: {r}",t.format(region=r,terms=terms)))
-    batch=60
+    batch=30
     hours=int((datetime.now(timezone.utc)-datetime(2026,1,1,tzinfo=timezone.utc)).total_seconds()//3600)
     start=(hours*batch)%len(regional)
     return core+[regional[(start+i)%len(regional)] for i in range(batch)]
