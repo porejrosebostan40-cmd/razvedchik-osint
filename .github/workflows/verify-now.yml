@@ -1,0 +1,30 @@
+name: RiskWatch verification
+on:
+  push:
+    branches: [main]
+permissions:
+  contents: write
+jobs:
+  verify:
+    if: github.actor != 'riskwatch-bot'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Install
+        run: pip install -r requirements.txt
+      - name: Run verification with alternate GPT-5.6 model
+        env:
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+          OPENAI_MODEL: gpt-5.6-terra
+        run: python -m riskwatch.cli > verification_result.json
+      - name: Commit verification result
+        run: |
+          git config user.name 'riskwatch-verification-bot'
+          git config user.email 'riskwatch-verification-bot@users.noreply.github.com'
+          git add verification_result.json
+          git commit -m 'chore: save production AI verification result' || exit 0
+          git push
