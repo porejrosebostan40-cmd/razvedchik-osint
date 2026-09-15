@@ -149,3 +149,12 @@ def test_evidence_graph_penalizes_contradiction():
     ]
     g=build_evidence_graph(events)
     assert g["metrics"]["contradictions"]>=1 and g["metrics"]["chain_score"]<40
+
+def test_site_scoped_search_rejects_wrong_domain_results():
+    from riskwatch.search import _matches_site, _site_targets
+    q='site:fsin.gov.ru "заключенные" "военная служба"'
+    targets=_site_targets(q)
+    assert targets==('fsin.gov.ru',)
+    assert _matches_site('https://fsin.gov.ru/news/1',targets)
+    assert _matches_site('https://vologda.fsin.gov.ru/news/1',targets)
+    assert not _matches_site('https://www.bing.com/search?q=x',targets)
