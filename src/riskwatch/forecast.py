@@ -16,6 +16,7 @@ NEGATIVE_TERMS = ("опроверг", "не подтверд", "отменен",
 TARGET_TERMS = ("осужден", "осуждён", "заключен", "заключён", "исправительн", "колони", "мест лишения свободы", "фсин", "уфсин", "фку", "содержащихся")
 ACTION_TERMS = ("мобилиз", "привлеч", "военн", "контракт", "зачислен", "направлен", "отправлен", "призван", "служб", "отбор", "медицин", "список", "учет", "учёт", "квот", "транспорт")
 PRIMARY_DOMAINS = ("kremlin.ru", "government.ru", "mil.ru", "fsin.gov.ru", "publication.pravo.gov.ru", "minjust.gov.ru", "duma.gov.ru", "zakupki.gov.ru", "gov.ru")
+SEARCH_ENGINES = ("duckduckgo.com", "bing.com", "google.com", "yandex.ru", "yandex.com")
 
 
 def _domain(url):
@@ -23,6 +24,18 @@ def _domain(url):
         return urlsplit(str(url)).netloc.lower().split(":")[0].removeprefix("www.")
     except ValueError:
         return ""
+
+
+def _source_family(e):
+    """Publisher family; search engines never count as independent evidence."""
+    domain = _domain(e.get("url", ""))
+    if not domain:
+        return ""
+    for suffix in PRIMARY_DOMAINS:
+        if domain == suffix or domain.endswith("." + suffix):
+            return suffix
+    parts = domain.split(".")
+    return ".".join(parts[-2:]) if len(parts) >= 2 else domain
 
 
 def _text(e):
@@ -76,19 +89,19 @@ def evidence_score(events):
     events = list(events or [])
     target = _target_events(events)
     action = [e for e in target if any(t in _text(e) for t in ACTION_TERMS)]
-    domains = {_domain(e.get("url", "")) for e in target if _domain(e.get("url", ""))}
+    families = {_source_family(e) for e in target if _source_family(e) and _source_family(e) not in SEARCH_ENGINES}
     primary = sum(_is_primary(e) for e in target)
     direct = 30 if any(_root_event(e) for e in events) else 0
     neg = sum(any(t in _text(e) for t in NEGATIVE_TERMS) for e in events)
-    score = max(0, min(100, min(30, len(action) * 8) + min(25, max(0, len(domains) - 1) * 8) + min(25, primary * 10) + direct - min(35, neg * 8)))
-    return {"score": score, "target_events": len(target), "action_events": len(action), "independent_domains": len(domains), "primary_events": primary, "negative_indicators": neg}
+    score = max(0, min(100, min(30, len(action) * 8) + min(25, max(0, len(families) - 1) * 8) + min(25, primary * 10) + direct - min(35, neg * 8)))
+    return {"score": score, "target_events": len(target), "action_events": len(action), "independent_domains": len(families), "source_families": len(families), "primary_events": primary, "negative_indicators": neg}
 
 
 def build_forecast(events):
     events = list(events or [])
     active = sorted({s for s in (_stage(e) for e in events) if s > 0})
     max_stage = max(active, default=0)
-    domains = {d for d in (_domain(e.get("url", "")) for e in events) if d}
+    families = {_source_family(e) for e in events if _source_family(e) and _source_family(e) not in SEARCH_ENGINES}
     regions = {str(e.get("region", "")).strip() for e in events if str(e.get("region", "")).strip()}
     negative = sum(any(t in _text(e) for t in NEGATIVE_TERMS) for e in events)
     now = datetime.now(timezone.utc).timestamp()
@@ -96,7 +109,7 @@ def build_forecast(events):
     older = sum(1 for e in events if _timestamp(e) and 3 * 86400 < now - _timestamp(e) <= 14 * 86400)
     acceleration = 1.0 if not older and recent else (round(min(3.0, recent / older), 2) if older else 0.0)
     ordered = active == list(range(1, max_stage + 1)) if max_stage else False
-    structure = max(0, min(95, int(8 + min(32, len(active) * 8 + (6 if ordered else 0)) + min(24, max(0, len(domains) - 1) * 8) + min(12, max(0, len(regions) - 1) * 3) + min(12, max(0, acceleration - 1) * 6) - min(30, negative * 10))))
+    structure = max(0, min(95, int(8 + min(32, len(active) * 8 + (6 if ordered else 0)) + min(24, max(0, len(families) - 1) * 8) + min(12, max(0, len(regions) - 1) * 3) + min(12, max(0, acceleration - 1) * 6) - min(30, negative * 10))))
     ev = evidence_score(events)
     if max_stage >= 4:
         nxt, horizon = "root_scenario", "24-72h"
@@ -106,7 +119,7 @@ def build_forecast(events):
         nxt, horizon = "organizational_or_logistical_action", "3-14d"
     else:
         nxt, horizon = "administrative_preparation", "7-30d"
-    return {"scenario_id": SCENARIO_ID, "pattern_stage": max_stage, "pattern_stage_name": STAGES[max_stage][0], "observed_stages": [STAGES[n][0] for n in active], "next_stage": nxt, "next_event_horizon": horizon, "independent_domains": len(domains), "regions_with_signals": len(regions), "negative_indicators": negative, "acceleration": acceleration, "structure_score": structure, "evidence_score": ev["score"], "evidence_metrics": ev, "interpretation": "ordered multi-stage chain is forming" if len(active) >= 2 and max_stage >= 2 else "isolated or early-stage signals; chain not established", "_events": events}
+    return {"scenario_id": SCENARIO_ID, "pattern_stage": max_stage, "pattern_stage_name": STAGES[max_stage][0], "observed_stages": [STAGES[n][0] for n in active], "next_stage": nxt, "next_event_horizon": horizon, "independent_domains": len(families), "source_families": len(families), "regions_with_signals": len(regions), "negative_indicators": negative, "acceleration": acceleration, "structure_score": structure, "evidence_score": ev["score"], "evidence_metrics": ev, "interpretation": "ordered multi-stage chain is forming" if len(active) >= 2 and max_stage >= 2 else "isolated or early-stage signals; chain not established", "_events": events}
 
 
 def _deadline(now, horizon):
