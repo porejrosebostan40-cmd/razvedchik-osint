@@ -3,7 +3,7 @@
   "confidence": 40,
   "risk": 60,
   "decision": "WATCH",
-  "reason": "OpenAI analysis failed: HTTPError status=400 body={\n  \"error\": {\n    \"message\": \"Response input messages must contain the word 'json' in some form to use 'text.format' of type 'json_object'.\",\n    \"type\": \"invalid_request_error\",\n    \"param\": \"input\",\n    \"code\": null\n  }\n}; deterministic fallback used",
+  "reason": "OpenAI analysis failed: HTTPError status=429 body={\n  \"error\": {\n    \"message\": \"Rate limit reached for gpt-5.6-luna in organization org-MYHgoY7mWZFMbaJpA0Uo7t70 on tokens per min (TPM): Limit 100000, Used 94701, Requested 16426. Please try again in 80h6m51.84s. Visit https://platform.openai.com/account/rate-limits to learn more. You can increase y; deterministic fallback used",
   "signals": [
     "official_or_primary_results=0",
     "regional_results=120"
