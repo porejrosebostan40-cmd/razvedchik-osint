@@ -1,6 +1,25 @@
 import hashlib
-from collections import defaultdict
 from .forecast import _eid, _root_event, _source_family, _stage, _text, _timestamp, _is_primary, TARGET_TERMS, ACTION_TERMS, SEARCH_ENGINES
+
+DIRECT_ROOT_TERMS=("привлечен", "привлечён", "зачислен", "зачислён", "направлен", "отправлен", "отправл", "призван", "заключил контракт", "заключен контракт", "заключён контракт", "начал службу")
+PREPARATION_TERMS=("подготов", "список", "списки", "отбор", "учет", "учёт", "медицин", "провер", "поручен", "поручён")
+
+
+def _graph_stage(event):
+    text=_text(event)
+    if any(term in text for term in DIRECT_ROOT_TERMS) and any(term in text for term in TARGET_TERMS):
+        return 5
+    if any(term in text for term in PREPARATION_TERMS) and any(term in text for term in TARGET_TERMS):
+        if any(term in text for term in ("транспорт", "размещ", "снабж", "формирован", "комплектован")):
+            return 3
+        if any(term in text for term in ("поручен", "поручён", "подготов", "список", "списки", "отбор", "учет", "учёт", "медицин", "провер")):
+            return 2
+    return _stage(event)
+
+
+def _graph_root(event):
+    text=_text(event)
+    return any(term in text for term in DIRECT_ROOT_TERMS) and any(term in text for term in TARGET_TERMS)
 
 
 def _usable(event):
@@ -37,7 +56,7 @@ def _edge_type(a, b):
 
 
 def _compatible_order(a, b):
-    sa, sb = _stage(a), _stage(b)
+    sa, sb = _graph_stage(a), _graph_stage(b)
     ta, tb = _timestamp(a), _timestamp(b)
     if not ta or not tb:
         return sa != sb
@@ -52,15 +71,7 @@ def build_evidence_graph(events, max_edges=40):
     nodes = []
     for event in usable:
         family = _source_family(event)
-        nodes.append({
-            "id": _eid(event),
-            "stage": _stage(event),
-            "family": family,
-            "primary": bool(_is_primary(event)),
-            "region": str(event.get("region", "")).strip(),
-            "ts": _timestamp(event),
-            "root": bool(_root_event(event)),
-        })
+        nodes.append({"id": _eid(event), "stage": _graph_stage(event), "family": family, "primary": bool(_is_primary(event)), "region": str(event.get("region", "")).strip(), "ts": _timestamp(event), "root": bool(_graph_root(event))})
 
     edges = []
     contradiction_count = 0
@@ -75,9 +86,9 @@ def build_evidence_graph(events, max_edges=40):
             if edge_type == "contradiction":
                 contradiction_count += 1
             ta, tb = _timestamp(a), _timestamp(b)
-            ordered = (ta <= tb) if ta and tb else (_stage(a) <= _stage(b))
+            ordered = (ta <= tb) if ta and tb else (_graph_stage(a) <= _graph_stage(b))
             src, dst = (_eid(a), _eid(b)) if ordered else (_eid(b), _eid(a))
-            edges.append({"from": src, "to": dst, "type": edge_type, "stage_from": _stage(a) if ordered else _stage(b), "stage_to": _stage(b) if ordered else _stage(a)})
+            edges.append({"from": src, "to": dst, "type": edge_type, "stage_from": _graph_stage(a) if ordered else _graph_stage(b), "stage_to": _graph_stage(b) if ordered else _graph_stage(a)})
 
     edges = sorted(edges, key=lambda e: (e["type"] == "contradiction", e["stage_to"], e["stage_from"]))[:max_edges]
     families = {n["family"] for n in nodes}
@@ -85,32 +96,9 @@ def build_evidence_graph(events, max_edges=40):
     root_nodes = sum(n["root"] for n in nodes)
     ordered_edges = sum(e["type"] == "corroboration" and e["stage_from"] < e["stage_to"] for e in edges)
     regional_families = {n["family"] for n in nodes if n["region"]}
-    chain_score = max(0, min(100,
-        min(25, len(families) * 8)
-        + min(20, primary_nodes * 10)
-        + min(25, ordered_edges * 10)
-        + min(15, root_nodes * 15)
-        + min(10, len(regional_families) * 3)
-        - min(30, contradiction_count * 10)
-    ))
+    chain_score = max(0, min(100, min(25, len(families) * 8) + min(20, primary_nodes * 10) + min(25, ordered_edges * 10) + min(15, root_nodes * 15) + min(10, len(regional_families) * 3) - min(30, contradiction_count * 10)))
     fingerprint = hashlib.sha256(("|".join(sorted(n["id"] for n in nodes)) + "#" + "|".join(f"{e['from']}:{e['to']}:{e['type']}" for e in edges)).encode()).hexdigest()[:16]
-    return {
-        "version": 1,
-        "nodes": nodes[:80],
-        "edges": edges,
-        "metrics": {
-            "nodes": len(nodes),
-            "edges": len(edges),
-            "source_families": len(families),
-            "primary_nodes": primary_nodes,
-            "root_nodes": root_nodes,
-            "ordered_support_edges": ordered_edges,
-            "contradictions": contradiction_count,
-            "regional_families": len(regional_families),
-            "chain_score": chain_score,
-        },
-        "fingerprint": fingerprint,
-    }
+    return {"version": 1, "nodes": nodes[:80], "edges": edges, "metrics": {"nodes": len(nodes), "edges": len(edges), "source_families": len(families), "primary_nodes": primary_nodes, "root_nodes": root_nodes, "ordered_support_edges": ordered_edges, "contradictions": contradiction_count, "regional_families": len(regional_families), "chain_score": chain_score}, "fingerprint": fingerprint}
 
 
 def compact_chain(graph):
