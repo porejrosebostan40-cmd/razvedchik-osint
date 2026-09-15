@@ -54,6 +54,19 @@ def test_ai_caps_single_source_probability():
     assert d["confidence"] <= 50
 
 
+def test_ai_requires_domain_independence_not_kind_labels():
+    from riskwatch.ai import _validate, _eid
+    events=[
+        {"url":"https://example.org/a","title":"A","kind":"source-a"},
+        {"url":"https://example.org/b","title":"B","kind":"source-b"},
+    ]
+    ids=[_eid(e) for e in events]
+    result={"probability":99,"confidence":99,"risk":99,"facts":[{"text":"fact","event_ids":ids}],"inferences":[],"evidence_event_ids":ids,"missing_indicators":[]}
+    d=_validate(result,events)
+    assert d["probability"] <= 60
+    assert d["confidence"] <= 50
+
+
 def test_ai_caps_non_primary_corroboration():
     from riskwatch.ai import _validate, _eid
     events=[
@@ -79,6 +92,26 @@ def test_ai_allows_high_but_not_absolute_primary_corroboration():
     assert d["probability"] <= 95
     assert d["confidence"] <= 90
     assert d["probability"] < 100
+
+
+def test_pattern_engine_recognizes_ordered_chain_and_next_step():
+    from riskwatch.forecast import build_forecast
+    events=[
+        {"url":"https://government.ru/a","title":"Правительство изменило порядок","snippet":"новые правила"},
+        {"url":"https://fsin.gov.ru/b","title":"Поручено подготовить списки","snippet":"проверка и учет"},
+        {"url":"https://example.net/c","title":"Подготовлены места и транспорт","snippet":"снабжение и размещение"},
+    ]
+    f=build_forecast(events)
+    assert f["pattern_stage"] == 3
+    assert f["next_stage"] == "operational_implementation"
+    assert f["structure_score"] > 30
+
+
+def test_pattern_engine_does_not_turn_one_event_into_high_structure():
+    from riskwatch.forecast import build_forecast
+    f=build_forecast([{"url":"https://example.org/a","title":"важная новость","snippet":""}])
+    assert f["pattern_stage"] == 0
+    assert f["structure_score"] < 40
 
 
 def test_regional_rotation_changes_each_20_minute_slot():
