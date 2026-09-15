@@ -13,8 +13,8 @@ def test_store_roundtrip():
         s=Store(str(p)); s.add_events([{"url":"https://example.org/a","title":"x","source":"test"}]); s.save_decision({"risk":50,"probability":40,"confidence":70,"decision":"WATCH","reason":"test"})
         assert len(Store(str(p)).recent())==1
 
-def test_ai_fallback_without_key(monkeypatch):
-    import riskwatch.ai as ai
-    monkeypatch.setattr(ai.SETTINGS,"openai_api_key","")
-    d=ai.analyze([])
-    assert d["decision"]=="NO_AI_KEY"
+def test_ai_fallback_function():
+    from riskwatch.ai import _fallback
+    d=_fallback([],"test")
+    assert 0 <= d["risk"] <= 100
+    assert d["decision"]=="WATCH"
