@@ -2,6 +2,7 @@ import hashlib, json, re, requests
 from urllib.parse import urlsplit
 from .config import SETTINGS
 from .forecast import build_forecast, render_context
+from .methodology import METHODOLOGY_TEXT, HEURISTICS, SOURCE_RULES, SEARCH_SEQUENCE, POSITIVE_INDICATORS, NEGATIVE_INDICATORS, OUTPUT_RULES
 
 SCENARIO_ID='prisoner_mobilization'
 SCENARIO_QUESTION='Будут ли мужчин из мест лишения свободы, прежде всего из исправительных колоний, мобилизовывать/привлекать к военной службе после 20 сентября 2026 года?'
@@ -16,13 +17,17 @@ SYSTEM='''Ты аналитическое ядро системы раннего
 
 Разделяй FACT, INFERENCE и UNKNOWN. Каждый FACT/INFERENCE обязан ссылаться на event_ids. Не считай число публикаций доказательством. Перепечатки, синдикацию и сообщения из одного первоисточника объединяй в одну evidence family.
 
-Обязательно анализируй обе стороны гипотезы: признаки движения К СЦЕНАРИЮ и признаки движения ОТ СЦЕНАРИЯ. Отсутствие ожидаемого следующего шага является отрицательным доказательством.
+Обязательно анализируй обе стороны гипотезы: признаки движения К СЦЕНАРИЮ и признаки движения ОТ СЦЕНАРИЯ. Отсутствие ожидаемого следующего шага является отрицательным доказательством только тогда, когда этот шаг должен был быть наблюдаемым в рассматриваемом горизонте.
 
-Прогнозируй вероятность именно основного сценария и отдельно следующий наблюдаемый шаг. Укажи горизонт. Не выдавай вероятность выше того, что позволяет доказательная структура и историческая калибровка. Если данных недостаточно — UNKNOWN и нулевая некалиброванная вероятность.
+Различай два прогноза: (1) вероятность основного сценария и (2) вероятность следующего наблюдаемого шага. Это разные величины и их нельзя смешивать.
+
+Используй накопленную методику ниже как обязательный протокол, а не как справочную подсказку. Не выдумывай дополнительные правила, источники или факты. Если доказательств недостаточно — UNKNOWN.
+
+''' + METHODOLOGY_TEXT + '''
 
 Верни только JSON: probability, confidence, risk, decision, reason, facts, inferences, evidence_event_ids, missing_indicators, next_event, horizon, forecast_basis, scenario_answer.
 '''
-PRIMARY_DOMAINS=('kremlin.ru','government.ru','mil.ru','fsin.gov.ru','minjust.gov.ru','duma.gov.ru','council.gov.ru','publication.pravo.gov.ru')
+PRIMARY_DOMAINS=('kremlin.ru','government.ru','mil.ru','fsin.gov.ru','minjust.gov.ru','duma.gov.ru','council.gov.ru','publication.pravo.gov.ru','zakupki.gov.ru','gov.ru','epp.genproc.gov.ru')
 
 def _eid(e): return hashlib.sha256((str(e.get('url',''))+'|'+str(e.get('title',''))).encode()).hexdigest()[:16]
 def _domain(url):
@@ -101,7 +106,7 @@ def _validate(result,events,forecast=None):
 def analyze(events):
     forecast=build_forecast(events)
     if not SETTINGS.openai_api_key:return _fallback(events,'OPENAI_API_KEY is not configured',forecast)
-    payload={'model':SETTINGS.openai_model,'instructions':SYSTEM,'input':('Return only JSON. '+render_context(forecast)+'\n'+json.dumps({'scenario_id':SCENARIO_ID,'scenario_question':SCENARIO_QUESTION,'events':_compact_events(events)},ensure_ascii=False)),'text':{'format':{'type':'json_object'}},'max_output_tokens':1100,'store':False}
+    payload={'model':SETTINGS.openai_model,'instructions':SYSTEM,'input':('Return only JSON. '+render_context(forecast)+'\n'+json.dumps({'scenario_id':SCENARIO_ID,'scenario_question':SCENARIO_QUESTION,'methodology_rules':{'source_rules':SOURCE_RULES,'search_sequence':SEARCH_SEQUENCE,'positive_indicators':POSITIVE_INDICATORS,'negative_indicators':NEGATIVE_INDICATORS,'heuristics':HEURISTICS,'output_rules':OUTPUT_RULES},'events':_compact_events(events)},ensure_ascii=False)),'text':{'format':{'type':'json_object'}},'max_output_tokens':1400,'store':False}
     try:
         r=requests.post('https://api.openai.com/v1/responses',headers={'Authorization':f'Bearer {SETTINGS.openai_api_key}','Content-Type':'application/json'},json=payload,timeout=60); r.raise_for_status(); result=_extract_json(_response_text(r.json()))
         if not isinstance(result,dict):raise ValueError('model JSON is not object')
