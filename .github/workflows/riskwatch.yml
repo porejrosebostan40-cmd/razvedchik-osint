@@ -37,14 +37,42 @@ jobs:
           RISKWATCH_STATE: riskwatch_state.json
           MAX_RESULTS_PER_QUERY: '6'
         run: python -m riskwatch.cli > riskwatch_latest.json
-      - name: Persist state
+      - name: Persist state safely
+        shell: bash
         run: |
+          set -euo pipefail
+          cp riskwatch_state.json /tmp/riskwatch_state.local.json
+          cp riskwatch_latest.json /tmp/riskwatch_latest.local.json
           git config user.name 'riskwatch-bot'
           git config user.email 'riskwatch-bot@users.noreply.github.com'
-          git add riskwatch_state.json riskwatch_latest.json
-          git diff --cached --quiet || git commit -m 'chore: update riskwatch state'
-          git pull --rebase origin main
-          git push
+          for attempt in 1 2 3; do
+            git fetch origin main
+            git reset --hard origin/main
+            python - <<'PY'
+          import json
+          from pathlib import Path
+          remote=json.loads(Path('riskwatch_state.json').read_text(encoding='utf-8'))
+          local=json.loads(Path('/tmp/riskwatch_state.local.json').read_text(encoding='utf-8'))
+          events={**remote.get('events',{}), **local.get('events',{})}
+          events=dict(sorted(events.items(), key=lambda kv: kv[1].get('ts',0))[-3000:])
+          decisions=remote.get('decisions',[])+local.get('decisions',[])
+          decisions=sorted(decisions,key=lambda x:x.get('ts',0))[-500:]
+          forecasts={}
+          for item in remote.get('forecasts',[])+local.get('forecasts',[]):
+              forecasts[item.get('forecast_id',str(len(forecasts)))]=item
+          forecasts=sorted(forecasts.values(),key=lambda x:x.get('created_ts',0))[-1000:]
+          merged={'events':events,'decisions':decisions,'forecasts':forecasts,'last_ai_ts':max(float(remote.get('last_ai_ts',0)),float(local.get('last_ai_ts',0)))}
+          Path('riskwatch_state.json').write_text(json.dumps(merged,ensure_ascii=False,indent=2),encoding='utf-8')
+          Path('riskwatch_latest.json').write_text(Path('/tmp/riskwatch_latest.local.json').read_text(encoding='utf-8'),encoding='utf-8')
+          PY
+            git add riskwatch_state.json riskwatch_latest.json
+            if git diff --cached --quiet; then exit 0; fi
+            git commit -m 'chore: update riskwatch state'
+            if git push; then exit 0; fi
+            git reset --hard HEAD~1
+          done
+          echo 'Failed to persist state after 3 attempts' >&2
+          exit 1
       - name: Upload latest report
         uses: actions/upload-artifact@v4
         with:
