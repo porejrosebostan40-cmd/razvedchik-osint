@@ -4,6 +4,7 @@ from urllib.parse import quote_plus, urlparse, parse_qs, unquote
 from .config import SETTINGS
 
 HEADERS={"User-Agent":"RiskWatch/1.0 (+public-source-monitoring)"}
+SEARCH_ENGINE_DOMAINS=("duckduckgo.com","bing.com","google.com","yandex.ru","yandex.com")
 
 
 def _clean(url):
@@ -26,14 +27,25 @@ def _site_targets(query):
     return tuple(targets)
 
 
+def _domain(url):
+    try:
+        return urlparse(url).netloc.lower().split(":")[0].removeprefix("www.")
+    except ValueError:
+        return ""
+
+
 def _matches_site(url, targets):
     if not targets:
         return True
-    try:
-        domain=urlparse(url).netloc.lower().split(":")[0].removeprefix("www.")
-    except ValueError:
+    domain=_domain(url)
+    return bool(domain) and any(domain == target or domain.endswith("." + target) for target in targets)
+
+
+def _usable_result_url(url, targets):
+    domain=_domain(url)
+    if not domain or domain in SEARCH_ENGINE_DOMAINS or any(domain.endswith("."+x) for x in SEARCH_ENGINE_DOMAINS):
         return False
-    return any(domain == target or domain.endswith("." + target) for target in targets)
+    return _matches_site(url, targets)
 
 
 def search(query, limit=None):
@@ -49,7 +61,7 @@ def search(query, limit=None):
                 a=node.select_one("a.result__a") if source=="DuckDuckGo" else node.select_one("h2 a")
                 if not a: continue
                 result_url=_clean(a.get("href",""))
-                if not _matches_site(result_url, targets): continue
+                if not _usable_result_url(result_url, targets): continue
                 sn=node.select_one(".result__snippet") if source=="DuckDuckGo" else node.select_one(".b_caption p")
                 out.append({"source":source,"url":result_url,"title":a.get_text(" ",strip=True),"snippet":sn.get_text(" ",strip=True) if sn else "","query":query})
                 if len(out)>=limit: break
