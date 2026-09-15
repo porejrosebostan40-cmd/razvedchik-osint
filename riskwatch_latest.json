@@ -1,7 +1,7 @@
 {
   "scenario_question": "Будут ли мужчин из мест лишения свободы, прежде всего из исправительных колоний, мобилизовывать/привлекать к военной службе после 20 сентября 2026 года?",
   "scenario_answer": "UNKNOWN",
-  "probability": 0.0,
+  "probability": null,
   "model_probability": 0,
   "probability_calibration": {
     "probability": 0,
@@ -10,11 +10,11 @@
     "raw": 0,
     "horizon": "24-72h"
   },
-  "risk": 0,
+  "risk": null,
   "model_risk": 0,
   "confidence": 0,
   "analysis_provider": "fallback",
-  "reason": "OpenAI HTTP failure: 429 {\n  \"error\": {\n    \"message\": \"Rate limit reached for gpt-5.6-luna in organization org-MYHgoY7mWZFMbaJpA0Uo7t70 on tokens per min (TPM): Limit 100000, Used 98719, Requested 2894. Please try again in 11h36m48.959s. Visit https://platform.openai.com/account/rate-limits to learn more. You can increase ",
+  "reason": "OpenAI HTTP failure: 429 {\n  \"error\": {\n    \"message\": \"Rate limit reached for gpt-5.6-luna in organization org-MYHgoY7mWZFMbaJpA0Uo7t70 on tokens per min (TPM): Limit 100000, Used 98564, Requested 2900. Please try again in 10h32m26.88s. Visit https://platform.openai.com/account/rate-limits to learn more. You can increase y",
   "signals": [
     "pattern_stage=4",
     "structure_score=28"
@@ -53,7 +53,7 @@
     },
     "interpretation": "isolated or early-stage signals; chain not established",
     "evidence_chain": {
-      "version": 1,
+      "version": 2,
       "metrics": {
         "nodes": 0,
         "edges": 0,
@@ -79,7 +79,7 @@
     "calibration_status": "insufficient_history"
   },
   "evidence_chain": {
-    "version": 1,
+    "version": 2,
     "metrics": {
       "nodes": 0,
       "edges": 0,
@@ -95,5 +95,5 @@
     "contradiction_edges": [],
     "fingerprint": "334359b90efed75d"
   },
-  "forecast_basis": "PATTERN_ENGINE\nscenario_id=prisoner_mobilization\npattern_stage=4\npattern_stage_name=operational_implementation\nobserved_stages=['operational_implementation']\nnext_stage=root_scenario\nnext_event_horizon=24-72h\nindependent_domains=0\nsource_families=0\nregions_with_signals=7\nnegative_indicators=0\nacceleration=1.0\nstructure_score=28\nevidence_score=30\nevidence_metrics={'score': 30, 'target_events': 15, 'action_events': 9, 'independent_domains': 0, 'source_families': 0, 'primary_events': 0, 'negative_indicators': 0}\ninterpretation=isolated or early-stage signals; chain not established\nevidence_chain={'version': 1, 'metrics': {'nodes': 0, 'edges': 0, 'source_families': 0, 'primary_nodes': 0, 'root_nodes': 0, 'ordered_support_edges': 0, 'contradictions': 0, 'regional_families': 0, 'chain_score': 0}, 'support_edges': [], 'contradiction_edges': [], 'fingerprint': '334359b90efed75d'}\nCALIBRATION={'resolved': 0, 'brier': None, 'issued_brier': None, 'brier_skill_score': None, 'issued_brier_skill_score': None, 'calibration_status': 'insufficient_history'}\nstructure_score and evidence_score are evidence-strength measures, not probabilities; root probability requires temporal historical calibration."
+  "forecast_basis": "PATTERN_ENGINE\nscenario_id=prisoner_mobilization\npattern_stage=4\npattern_stage_name=operational_implementation\nobserved_stages=['operational_implementation']\nnext_stage=root_scenario\nnext_event_horizon=24-72h\nindependent_domains=0\nsource_families=0\nregions_with_signals=7\nnegative_indicators=0\nacceleration=1.0\nstructure_score=28\nevidence_score=30\nevidence_metrics={'score': 30, 'target_events': 15, 'action_events': 9, 'independent_domains': 0, 'source_families': 0, 'primary_events': 0, 'negative_indicators': 0}\ninterpretation=isolated or early-stage signals; chain not established\nevidence_chain={'version': 2, 'metrics': {'nodes': 0, 'edges': 0, 'source_families': 0, 'primary_nodes': 0, 'root_nodes': 0, 'ordered_support_edges': 0, 'contradictions': 0, 'regional_families': 0, 'chain_score': 0}, 'support_edges': [], 'contradiction_edges': [], 'fingerprint': '334359b90efed75d'}\nretrieval={'queries_attempted': 54, 'queries_with_results': 0, 'regional_queries_attempted': 30, 'regional_queries_with_results': 0, 'result_count': 0, 'retrieval_coverage_score': 0.0, 'coverage_is_retrieval_not_reality': True}\nCALIBRATION={'resolved': 0, 'brier': None, 'issued_brier': None, 'brier_skill_score': None, 'issued_brier_skill_score': None, 'calibration_status': 'insufficient_history'}\nstructure_score and evidence_score are evidence-strength measures, not probabilities; root probability requires temporal historical calibration."
 }
