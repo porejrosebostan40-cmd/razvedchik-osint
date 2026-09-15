@@ -1,5 +1,5 @@
 {
-  "probability": 60,
+  "probability": 0,
   "confidence": 40,
   "risk": 60,
   "decision": "WATCH",
@@ -11,9 +11,30 @@
   "missing_indicators": [
     "direct official decision confirming the scenario"
   ],
-  "next_event": "UNKNOWN",
-  "horizon": "UNKNOWN",
-  "forecast_basis": "",
-  "pattern": {},
-  "analysis_provider": "cached"
+  "next_event": "operational_implementation",
+  "horizon": "24-72h",
+  "forecast_basis": "PATTERN_ENGINE\npattern_stage=4\npattern_stage_name=operational_implementation\nobserved_stages=['legal_or_policy_signal', 'operational_implementation']\nnext_stage=operational_implementation\nnext_event_horizon=24-72h\nindependent_domains=1\nregions_with_signals=7\nnegative_indicators=0\nacceleration=1.0\nstructure_score=36\ninterpretation=ordered multi-stage chain is forming\nCALIBRATION={'resolved': 0, 'brier': None, 'calibration_status': 'insufficient_history'}\nstructure_score is evidence structure, not probability; probability requires historical calibration.",
+  "pattern": {
+    "pattern_stage": 4,
+    "pattern_stage_name": "operational_implementation",
+    "observed_stages": [
+      "legal_or_policy_signal",
+      "operational_implementation"
+    ],
+    "next_stage": "operational_implementation",
+    "next_event_horizon": "24-72h",
+    "independent_domains": 1,
+    "regions_with_signals": 7,
+    "negative_indicators": 0,
+    "acceleration": 1.0,
+    "structure_score": 36,
+    "interpretation": "ordered multi-stage chain is forming"
+  },
+  "analysis_provider": "cached",
+  "model_probability": 60,
+  "calibration": {
+    "resolved": 0,
+    "brier": null,
+    "calibration_status": "insufficient_history"
+  }
 }
