@@ -37,10 +37,10 @@
     "next_event_horizon": "24-72h",
     "independent_domains": 0,
     "source_families": 0,
-    "regions_with_signals": 4,
+    "regions_with_signals": 7,
     "negative_indicators": 0,
     "acceleration": 1.0,
-    "structure_score": 25,
+    "structure_score": 28,
     "evidence_score": 30,
     "evidence_metrics": {
       "score": 30,
@@ -95,5 +95,5 @@
     "contradiction_edges": [],
     "fingerprint": "334359b90efed75d"
   },
-  "forecast_basis": "PATTERN_ENGINE\nscenario_id=prisoner_mobilization\npattern_stage=4\npattern_stage_name=operational_implementation\nobserved_stages=['operational_implementation']\nnext_stage=root_scenario\nnext_event_horizon=24-72h\nindependent_domains=0\nsource_families=0\nregions_with_signals=4\nnegative_indicators=0\nacceleration=1.0\nstructure_score=25\nevidence_score=30\nevidence_metrics={'score': 30, 'target_events': 15, 'action_events': 9, 'independent_domains': 0, 'source_families': 0, 'primary_events': 0, 'negative_indicators': 0}\ninterpretation=isolated or early-stage signals; chain not established\nevidence_chain={'version': 1, 'metrics': {'nodes': 0, 'edges': 0, 'source_families': 0, 'primary_nodes': 0, 'root_nodes': 0, 'ordered_support_edges': 0, 'contradictions': 0, 'regional_families': 0, 'chain_score': 0}, 'support_edges': [], 'contradiction_edges': [], 'fingerprint': '334359b90efed75d'}\nCALIBRATION={'resolved': 0, 'brier': None, 'issued_brier': None, 'brier_skill_score': None, 'issued_brier_skill_score': None, 'calibration_status': 'insufficient_history'}\nstructure_score and evidence_score are evidence-strength measures, not probabilities; root probability requires temporal historical calibration."
+  "forecast_basis": "PATTERN_ENGINE\nscenario_id=prisoner_mobilization\npattern_stage=4\npattern_stage_name=operational_implementation\nobserved_stages=['operational_implementation']\nnext_stage=root_scenario\nnext_event_horizon=24-72h\nindependent_domains=0\nsource_families=0\nregions_with_signals=7\nnegative_indicators=0\nacceleration=1.0\nstructure_score=28\nevidence_score=30\nevidence_metrics={'score': 30, 'target_events': 15, 'action_events': 9, 'independent_domains': 0, 'source_families': 0, 'primary_events': 0, 'negative_indicators': 0}\ninterpretation=isolated or early-stage signals; chain not established\nevidence_chain={'version': 1, 'metrics': {'nodes': 0, 'edges': 0, 'source_families': 0, 'primary_nodes': 0, 'root_nodes': 0, 'ordered_support_edges': 0, 'contradictions': 0, 'regional_families': 0, 'chain_score': 0}, 'support_edges': [], 'contradiction_edges': [], 'fingerprint': '334359b90efed75d'}\nCALIBRATION={'resolved': 0, 'brier': None, 'issued_brier': None, 'brier_skill_score': None, 'issued_brier_skill_score': None, 'calibration_status': 'insufficient_history'}\nstructure_score and evidence_score are evidence-strength measures, not probabilities; root probability requires temporal historical calibration."
 }
