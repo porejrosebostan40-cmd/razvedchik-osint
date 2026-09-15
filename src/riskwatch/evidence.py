@@ -1,6 +1,12 @@
 import hashlib
 from collections import defaultdict
-from .forecast import _eid, _root_event, _source_family, _stage, _text, _timestamp, _is_primary, TARGET_TERMS, ACTION_TERMS
+from .forecast import _eid, _root_event, _source_family, _stage, _text, _timestamp, _is_primary, TARGET_TERMS, ACTION_TERMS, SEARCH_ENGINES
+
+
+def _usable(event):
+    text = _text(event)
+    family = _source_family(event)
+    return bool(family) and family not in SEARCH_ENGINES and any(term in text for term in TARGET_TERMS)
 
 
 def _target_key(event):
@@ -42,48 +48,32 @@ def _compatible_order(a, b):
 
 def build_evidence_graph(events, max_edges=40):
     events = list(events or [])
+    usable = [e for e in events if _usable(e)]
     nodes = []
-    by_family = defaultdict(list)
-    for event in events:
-        if not any(term in _text(event) for term in TARGET_TERMS):
-            continue
-        eid = _eid(event)
+    for event in usable:
         family = _source_family(event)
-        if not family:
-            continue
-        node = {
-            "id": eid,
+        nodes.append({
+            "id": _eid(event),
             "stage": _stage(event),
             "family": family,
             "primary": bool(_is_primary(event)),
             "region": str(event.get("region", "")).strip(),
             "ts": _timestamp(event),
             "root": bool(_root_event(event)),
-        }
-        nodes.append(node)
-        by_family[family].append(event)
+        })
 
     edges = []
     contradiction_count = 0
-    support_count = 0
-    for i, a in enumerate(events):
-        if not any(term in _text(a) for term in TARGET_TERMS):
-            continue
-        for b in events[i + 1:]:
-            if not any(term in _text(b) for term in TARGET_TERMS):
-                continue
-            if not _same_claim(a, b):
-                continue
+    for i, a in enumerate(usable):
+        for b in usable[i + 1:]:
             fa, fb = _source_family(a), _source_family(b)
-            if not fa or not fb or fa == fb:
+            if fa == fb or not _same_claim(a, b):
                 continue
             if not _compatible_order(a, b) and not _compatible_order(b, a):
                 continue
             edge_type = _edge_type(a, b)
             if edge_type == "contradiction":
                 contradiction_count += 1
-            else:
-                support_count += 1
             ta, tb = _timestamp(a), _timestamp(b)
             ordered = (ta <= tb) if ta and tb else (_stage(a) <= _stage(b))
             src, dst = (_eid(a), _eid(b)) if ordered else (_eid(b), _eid(a))
