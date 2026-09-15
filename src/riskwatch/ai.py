@@ -1,4 +1,5 @@
 import hashlib, json, re, requests
+from urllib.parse import urlsplit
 from .config import SETTINGS
 
 SYSTEM='''Ты аналитическое ядро системы раннего предупреждения с ЖЕСТКИМ КОНТРОЛЕМ ДОКАЗАТЕЛЬСТВ.
@@ -7,8 +8,8 @@ SYSTEM='''Ты аналитическое ядро системы раннего
 Если подтверждения нет — пиши UNKNOWN, а не предположение.
 Разделяй FACT (прямо подтверждено источником), INFERENCE (логический вывод из нескольких FACT) и UNKNOWN.
 Не называй слух, пересказ, комментарий или единичное сообщение подтвержденным фактом.
-Не считай наличие нескольких публикаций подтверждением, если они явно перепечатывают один источник.
-Для высокой вероятности нужны независимые подтверждения. probability выше 90 разрешена только при наличии как минимум двух независимых подтверждающих событий, среди которых желательно иметь официальный/первичный источник либо два независимых первичных источника.
+Не считай несколько публикаций независимым подтверждением, если они относятся к одному домену или явно перепечатывают один источник.
+Для высокой вероятности нужны независимые подтверждения из разных доменов. probability выше 90 разрешена только при наличии минимум двух событий с разными доменами и хотя бы одного официального/первичного источника либо двух независимых первичных источников.
 confidence не может быть выше качества доказательств. При отсутствии достаточных доказательств probability=0 и confidence=0.
 risk не должен использоваться для повышения probability.
 Не предсказывай событие только потому, что оно возможно или логично.
@@ -23,23 +24,25 @@ def _eid(e):
     return hashlib.sha256((str(e.get('url',''))+'|'+str(e.get('title',''))).encode()).hexdigest()[:16]
 
 
+def _domain(url):
+    try: return urlsplit(str(url)).netloc.lower().split(':')[0].removeprefix('www.')
+    except ValueError: return ''
+
+
+def _is_primary(url):
+    domain=_domain(url)
+    return any(domain==d or domain.endswith('.'+d) for d in PRIMARY_DOMAINS)
+
+
 def _fallback(events, reason):
-    official=sum(1 for e in events if any(x in e.get('url','') for x in PRIMARY_DOMAINS))
+    official=sum(1 for e in events if _is_primary(e.get('url','')))
     regional=sum(1 for e in events if e.get('region'))
-    # Conservative fallback: collection volume is NOT treated as evidence of the scenario.
     return {
-        'probability':0,
-        'confidence':0,
-        'risk':0,
-        'decision':'WATCH',
-        'reason':reason,
-        'facts':[],
-        'inferences':[],
-        'evidence_event_ids':[],
+        'probability':0,'confidence':0,'risk':0,'decision':'WATCH','reason':reason,
+        'facts':[],'inferences':[],'evidence_event_ids':[],
         'signals':[f'official_or_primary_results={official}',f'regional_results={regional}'],
         'missing_indicators':['direct official decision confirming the scenario','independent corroboration'],
-        'hallucination_guard':'fallback_no_claim_without_evidence',
-        'analysis_provider':'fallback'
+        'hallucination_guard':'fallback_no_claim_without_evidence','analysis_provider':'fallback'
     }
 
 
@@ -76,19 +79,12 @@ def _score(value):
 
 
 def _compact_events(events, limit=12):
-    selected=[]
-    seen=set()
+    selected=[]; seen=set()
     for e in reversed(events):
         eid=_eid(e)
         if eid in seen: continue
-        selected.append({
-            'event_id':eid,
-            'url':str(e.get('url',''))[:400],
-            'title':str(e.get('title',''))[:180],
-            'snippet':str(e.get('snippet',''))[:350],
-            'region':str(e.get('region',''))[:80],
-            'kind':str(e.get('kind',''))[:100],
-        })
+        selected.append({'event_id':eid,'url':str(e.get('url',''))[:400],'title':str(e.get('title',''))[:180],
+                         'snippet':str(e.get('snippet',''))[:350],'region':str(e.get('region',''))[:80],'kind':str(e.get('kind',''))[:100]})
         seen.add(eid)
         if len(selected)>=limit: break
     return selected
@@ -96,11 +92,7 @@ def _compact_events(events, limit=12):
 
 def _validate(result, events):
     allowed={_eid(e):e for e in events}
-    evidence=result.get('evidence_event_ids',[])
-    if not isinstance(evidence,list): evidence=[]
-    evidence=[x for x in evidence if isinstance(x,str) and x in allowed]
-    facts=result.get('facts',[])
-    inferences=result.get('inferences',[])
+    facts=result.get('facts',[]); inferences=result.get('inferences',[])
     if not isinstance(facts,list): facts=[]
     if not isinstance(inferences,list): inferences=[]
 
@@ -108,32 +100,27 @@ def _validate(result, events):
         out=[]
         for item in items:
             if not isinstance(item,dict): continue
-            text=item.get('text')
-            ids=item.get('event_ids',[])
+            text=item.get('text'); ids=item.get('event_ids',[])
             if not isinstance(text,str) or not text.strip() or not isinstance(ids,list): continue
             ids=[x for x in ids if isinstance(x,str) and x in allowed]
             if ids: out.append({'text':text.strip()[:500],'event_ids':ids})
         return out
 
-    facts=clean(facts)
-    inferences=clean(inferences)
-    used=[]
-    for item in facts+inferences: used.extend(item['event_ids'])
-    used=list(dict.fromkeys(used))
-    # Evidence gate: a model cannot create a supported claim from an unknown URL/id.
+    facts=clean(facts); inferences=clean(inferences)
+    used=list(dict.fromkeys(x for item in facts+inferences for x in item['event_ids']))
     if not facts and not inferences:
         return _fallback(events,'AI returned no evidence-linked facts or inferences; model result rejected by hallucination guard')
 
-    independent_kinds={str(allowed[x].get('kind','')) for x in used if x in allowed}
-    primary=any(any(d in allowed[x].get('url','') for d in PRIMARY_DOMAINS) for x in used)
-    corroborated=len(set(used))>=2 and len(independent_kinds)>=2
+    domains={_domain(allowed[x].get('url','')) for x in used if x in allowed and _domain(allowed[x].get('url',''))}
+    primary_domains={d for x in used if x in allowed and _is_primary(allowed[x].get('url','')) for d in [_domain(allowed[x].get('url',''))]}
+    corroborated=len(domains)>=2
+    primary=bool(primary_domains)
 
     p=_score(result.get('probability',0)); c=_score(result.get('confidence',0)); r=_score(result.get('risk',0))
-    # Hard ceiling based on evidence quality.  A single source can never yield a 95% pattern probability.
+    # Hard deterministic ceiling: no model output can override evidence quality.
     if not corroborated: p=min(p,60); c=min(c,50)
-    if corroborated and not primary: p=min(p,85); c=min(c,70)
-    if corroborated and primary: p=min(p,95); c=min(c,90)
-    if p>=95 and not (corroborated and primary): p=85
+    elif not primary: p=min(p,85); c=min(c,70)
+    else: p=min(p,95); c=min(c,90)
     if c>p: c=p
 
     result['probability']=p; result['confidence']=c; result['risk']=min(r,p)
@@ -141,27 +128,21 @@ def _validate(result, events):
     result['missing_indicators']=result.get('missing_indicators',[]) if isinstance(result.get('missing_indicators',[]),list) else []
     result['hallucination_guard']='passed_evidence_gate'
     result['evidence_quality']='corroborated_primary' if corroborated and primary else ('corroborated' if corroborated else 'single_source_or_nonindependent')
+    result['evidence_domains']=sorted(domains)
     return result
 
 
 def analyze(events):
     if not SETTINGS.openai_api_key: return _fallback(events,'OPENAI_API_KEY is not configured; deterministic fallback used')
     compact=_compact_events(events)
-    payload={
-        'model':SETTINGS.openai_model,
-        'instructions':SYSTEM,
-        'input':('Return only valid JSON. '+json.dumps({'scenario':'мобилизационные или связанные с ФСИН действия после 20 сентября 2026 года','events':compact},ensure_ascii=False)),
-        'text':{'format':{'type':'json_object'}},
-        'max_output_tokens':700,
-        'store':False,
-    }
+    payload={'model':SETTINGS.openai_model,'instructions':SYSTEM,
+             'input':('Return only valid JSON. '+json.dumps({'scenario':'мобилизационные или связанные с ФСИН действия после 20 сентября 2026 года','events':compact},ensure_ascii=False)),
+             'text':{'format':{'type':'json_object'}},'max_output_tokens':700,'store':False}
     try:
         r=requests.post('https://api.openai.com/v1/responses',headers={'Authorization':f'Bearer {SETTINGS.openai_api_key}','Content-Type':'application/json'},json=payload,timeout=60)
-        r.raise_for_status()
-        result=_extract_json(_response_text(r.json()))
+        r.raise_for_status(); result=_extract_json(_response_text(r.json()))
         if not isinstance(result,dict): raise ValueError('model JSON is not an object')
-        result.setdefault('decision','WATCH'); result.setdefault('reason','OpenAI analysis completed')
-        result.setdefault('signals',[]); result.setdefault('missing_indicators',[])
+        result.setdefault('decision','WATCH'); result.setdefault('reason','OpenAI analysis completed'); result.setdefault('signals',[]); result.setdefault('missing_indicators',[])
         return _validate(result,events)
     except requests.HTTPError as exc:
         status=getattr(exc.response,'status_code',None); body=''
