@@ -28,8 +28,57 @@ def test_store_roundtrip():
 def test_ai_fallback_function():
     from riskwatch.ai import _fallback
     d=_fallback([],"test")
-    assert 0 <= d["risk"] <= 100
+    assert d["probability"] == 0
+    assert d["confidence"] == 0
+    assert d["risk"] == 0
     assert d["decision"]=="WATCH"
+
+
+def test_ai_rejects_unlinked_claims():
+    from riskwatch.ai import _validate
+    events=[{"url":"https://example.org/a","title":"A","kind":"source-a"}]
+    result={"probability":99,"confidence":99,"risk":99,"facts":[],"inferences":[],"evidence_event_ids":["fake"],"missing_indicators":[]}
+    d=_validate(result,events)
+    assert d["probability"] == 0
+    assert d["confidence"] == 0
+    assert "hallucination guard" in d["reason"]
+
+
+def test_ai_caps_single_source_probability():
+    from riskwatch.ai import _validate, _eid
+    events=[{"url":"https://example.org/a","title":"A","kind":"source-a"}]
+    eid=_eid(events[0])
+    result={"probability":99,"confidence":99,"risk":99,"facts":[{"text":"fact","event_ids":[eid]}],"inferences":[],"evidence_event_ids":[eid],"missing_indicators":[]}
+    d=_validate(result,events)
+    assert d["probability"] <= 60
+    assert d["confidence"] <= 50
+
+
+def test_ai_caps_non_primary_corroboration():
+    from riskwatch.ai import _validate, _eid
+    events=[
+        {"url":"https://example.org/a","title":"A","kind":"source-a"},
+        {"url":"https://example.net/b","title":"B","kind":"source-b"},
+    ]
+    ids=[_eid(e) for e in events]
+    result={"probability":100,"confidence":100,"risk":100,"facts":[{"text":"fact","event_ids":ids}],"inferences":[],"evidence_event_ids":ids,"missing_indicators":[]}
+    d=_validate(result,events)
+    assert d["probability"] <= 85
+    assert d["confidence"] <= 70
+
+
+def test_ai_allows_high_but_not_absolute_primary_corroboration():
+    from riskwatch.ai import _validate, _eid
+    events=[
+        {"url":"https://fsin.gov.ru/a","title":"A","kind":"UFSIN"},
+        {"url":"https://example.net/b","title":"B","kind":"independent"},
+    ]
+    ids=[_eid(e) for e in events]
+    result={"probability":100,"confidence":100,"risk":100,"facts":[{"text":"fact","event_ids":ids}],"inferences":[],"evidence_event_ids":ids,"missing_indicators":[]}
+    d=_validate(result,events)
+    assert d["probability"] <= 95
+    assert d["confidence"] <= 90
+    assert d["probability"] < 100
 
 
 def test_regional_rotation_changes_each_20_minute_slot():
