@@ -1,20 +1,19 @@
 import hashlib, json, re, requests
 from urllib.parse import urlsplit
 from .config import SETTINGS
+from .forecast import build_forecast, render_context
 
 SYSTEM='''Ты аналитическое ядро системы раннего предупреждения с ЖЕСТКИМ КОНТРОЛЕМ ДОКАЗАТЕЛЬСТВ.
-Работай только с переданными событиями. Ничего не додумывай, не дополняй памятью модели и не используй внешние знания.
-Любое утверждение о факте должно ссылаться на один или несколько event_id из входных данных.
-Если подтверждения нет — пиши UNKNOWN, а не предположение.
+Работай только с переданными событиями и структурированным PATTERN_ENGINE. Не используй внешние знания.
+Главная задача — не найти документ, где конечное событие названо прямо, а восстановить логическую последовательность действий: что уже произошло, на какой стадии цепочки находится система и какое следующее наблюдаемое событие наиболее вероятно.
 Разделяй FACT (прямо подтверждено источником), INFERENCE (логический вывод из нескольких FACT) и UNKNOWN.
-Не называй слух, пересказ, комментарий или единичное сообщение подтвержденным фактом.
-Не считай несколько публикаций независимым подтверждением, если они относятся к одному домену или явно перепечатывают один источник.
-Для высокой вероятности нужны независимые подтверждения из разных доменов. probability выше 90 разрешена только при наличии минимум двух событий с разными доменами и хотя бы одного официального/первичного источника либо двух независимых первичных источников.
-confidence не может быть выше качества доказательств. При отсутствии достаточных доказательств probability=0 и confidence=0.
-risk не должен использоваться для повышения probability.
-Не предсказывай событие только потому, что оно возможно или логично.
-Верни только JSON и обязательно поля: probability, confidence, risk, decision, reason, facts, inferences, evidence_event_ids, missing_indicators.
-В facts и inferences каждый объект должен содержать text и event_ids.
+Для каждого FACT/INFERENCE обязательно укажи event_ids. Нельзя считать число публикаций доказательством само по себе.
+Публикации одного домена, явные перепечатки и сообщения, ссылающиеся на один первоисточник, не являются независимым подтверждением.
+Если данных недостаточно для следующего шага — прямо укажи UNKNOWN и missing_indicators.
+Прогноз должен содержать next_event, horizon и почему именно этот следующий шаг следует из последовательности, а не просто повторять найденные новости.
+Вероятность должна отражать вероятность сценария в указанном горизонте, а не уверенность в существовании отдельной новости.
+Не повышай probability только из-за регионального охвата или количества публикаций.
+Верни только JSON с полями: probability, confidence, risk, decision, reason, facts, inferences, evidence_event_ids, missing_indicators, next_event, horizon, forecast_basis.
 '''
 
 PRIMARY_DOMAINS=('kremlin.ru','government.ru','mil.ru','fsin.gov.ru','minjust.gov.ru','duma.gov.ru','council.gov.ru','publication.pravo.gov.ru')
@@ -34,15 +33,15 @@ def _is_primary(url):
     return any(domain==d or domain.endswith('.'+d) for d in PRIMARY_DOMAINS)
 
 
-def _fallback(events, reason):
-    official=sum(1 for e in events if _is_primary(e.get('url','')))
-    regional=sum(1 for e in events if e.get('region'))
+def _fallback(events, reason, forecast=None):
+    forecast=forecast or build_forecast(events)
     return {
         'probability':0,'confidence':0,'risk':0,'decision':'WATCH','reason':reason,
         'facts':[],'inferences':[],'evidence_event_ids':[],
-        'signals':[f'official_or_primary_results={official}',f'regional_results={regional}'],
-        'missing_indicators':['direct official decision confirming the scenario','independent corroboration'],
-        'hallucination_guard':'fallback_no_claim_without_evidence','analysis_provider':'fallback'
+        'signals':[f"pattern_stage={forecast.get('pattern_stage',0)}",f"structure_score={forecast.get('structure_score',0)}"],
+        'missing_indicators':['direct official decision confirming the scenario','independent corroboration','observable next-stage action'],
+        'next_event':'UNKNOWN','horizon':'UNKNOWN','forecast_basis':'insufficient evidence',
+        'pattern':forecast,'hallucination_guard':'fallback_no_claim_without_evidence','analysis_provider':'fallback'
     }
 
 
@@ -74,11 +73,10 @@ def _score(value):
     if isinstance(value,str):
         m=re.search(r'-?\d+(?:[.,]\d+)?',value.replace('%',''))
         if m: return max(0,min(100,int(float(m.group(0).replace(',','.')))))
-        if value.strip().lower() in {'неопределенная','неопределённая','unknown','uncertain','неизвестно'}: return 0
     return 0
 
 
-def _compact_events(events, limit=12):
+def _compact_events(events, limit=18):
     selected=[]; seen=set()
     for e in reversed(events):
         eid=_eid(e)
@@ -90,7 +88,8 @@ def _compact_events(events, limit=12):
     return selected
 
 
-def _validate(result, events):
+def _validate(result, events, forecast=None):
+    forecast=forecast or build_forecast(events)
     allowed={_eid(e):e for e in events}
     facts=result.get('facts',[]); inferences=result.get('inferences',[])
     if not isinstance(facts,list): facts=[]
@@ -109,23 +108,30 @@ def _validate(result, events):
     facts=clean(facts); inferences=clean(inferences)
     used=list(dict.fromkeys(x for item in facts+inferences for x in item['event_ids']))
     if not facts and not inferences:
-        return _fallback(events,'AI returned no evidence-linked facts or inferences; model result rejected by hallucination guard')
+        return _fallback(events,'AI returned no evidence-linked facts or inferences; model result rejected by hallucination guard',forecast)
 
     domains={_domain(allowed[x].get('url','')) for x in used if x in allowed and _domain(allowed[x].get('url',''))}
-    primary_domains={d for x in used if x in allowed and _is_primary(allowed[x].get('url','')) for d in [_domain(allowed[x].get('url',''))]}
+    primary_domains={_domain(allowed[x].get('url','')) for x in used if x in allowed and _is_primary(allowed[x].get('url',''))}
     corroborated=len(domains)>=2
     primary=bool(primary_domains)
 
     p=_score(result.get('probability',0)); c=_score(result.get('confidence',0)); r=_score(result.get('risk',0))
-    # Hard deterministic ceiling: no model output can override evidence quality.
+    # The model cannot exceed the deterministic evidence-quality ceiling.
     if not corroborated: p=min(p,60); c=min(c,50)
     elif not primary: p=min(p,85); c=min(c,70)
     else: p=min(p,95); c=min(c,90)
+    # An unformed pattern cannot receive a high scenario probability merely from scattered news.
+    if forecast.get('pattern_stage',0) < 2 and forecast.get('structure_score',0) < 40:
+        p=min(p,60); c=min(c,50)
     if c>p: c=p
 
     result['probability']=p; result['confidence']=c; result['risk']=min(r,p)
     result['facts']=facts; result['inferences']=inferences; result['evidence_event_ids']=used
     result['missing_indicators']=result.get('missing_indicators',[]) if isinstance(result.get('missing_indicators',[]),list) else []
+    result['next_event']=str(result.get('next_event','UNKNOWN'))[:500] or 'UNKNOWN'
+    result['horizon']=str(result.get('horizon','UNKNOWN'))[:100] or 'UNKNOWN'
+    result['forecast_basis']=str(result.get('forecast_basis',''))[:700]
+    result['pattern']=forecast
     result['hallucination_guard']='passed_evidence_gate'
     result['evidence_quality']='corroborated_primary' if corroborated and primary else ('corroborated' if corroborated else 'single_source_or_nonindependent')
     result['evidence_domains']=sorted(domains)
@@ -133,21 +139,22 @@ def _validate(result, events):
 
 
 def analyze(events):
-    if not SETTINGS.openai_api_key: return _fallback(events,'OPENAI_API_KEY is not configured; deterministic fallback used')
+    forecast=build_forecast(events)
+    if not SETTINGS.openai_api_key: return _fallback(events,'OPENAI_API_KEY is not configured; deterministic fallback used',forecast)
     compact=_compact_events(events)
     payload={'model':SETTINGS.openai_model,'instructions':SYSTEM,
-             'input':('Return only valid JSON. '+json.dumps({'scenario':'мобилизационные или связанные с ФСИН действия после 20 сентября 2026 года','events':compact},ensure_ascii=False)),
-             'text':{'format':{'type':'json_object'}},'max_output_tokens':700,'store':False}
+             'input':('Return only valid JSON. '+render_context(forecast)+'\n'+json.dumps({'scenario':'мобилизационные или связанные с ФСИН действия после 20 сентября 2026 года','events':compact},ensure_ascii=False)),
+             'text':{'format':{'type':'json_object'}},'max_output_tokens':900,'store':False}
     try:
         r=requests.post('https://api.openai.com/v1/responses',headers={'Authorization':f'Bearer {SETTINGS.openai_api_key}','Content-Type':'application/json'},json=payload,timeout=60)
         r.raise_for_status(); result=_extract_json(_response_text(r.json()))
         if not isinstance(result,dict): raise ValueError('model JSON is not an object')
         result.setdefault('decision','WATCH'); result.setdefault('reason','OpenAI analysis completed'); result.setdefault('signals',[]); result.setdefault('missing_indicators',[])
-        return _validate(result,events)
+        return _validate(result,events,forecast)
     except requests.HTTPError as exc:
         status=getattr(exc.response,'status_code',None); body=''
         try: body=exc.response.text[:300]
         except Exception: pass
-        return _fallback(events,f'OpenAI analysis failed: HTTPError status={status} body={body}; deterministic fallback used')
+        return _fallback(events,f'OpenAI analysis failed: HTTPError status={status} body={body}; deterministic fallback used',forecast)
     except (requests.RequestException, ValueError, TypeError, KeyError) as exc:
-        return _fallback(events,f'OpenAI analysis failed: {type(exc).__name__}: {str(exc).replace(chr(10)," ")[:300]}; deterministic fallback used')
+        return _fallback(events,f'OpenAI analysis failed: {type(exc).__name__}: {str(exc).replace(chr(10)," ")[:300]}; deterministic fallback used',forecast)
