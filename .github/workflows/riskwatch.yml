@@ -1,17 +1,13 @@
 name: RiskWatch
-
 on:
   workflow_dispatch:
   schedule:
-    - cron: '*/30 * * * *'
-
+    - cron: '7,27,47 * * * *'
 concurrency:
   group: riskwatch-main
   cancel-in-progress: false
-
 permissions:
   contents: write
-
 jobs:
   monitor:
     runs-on: ubuntu-latest
