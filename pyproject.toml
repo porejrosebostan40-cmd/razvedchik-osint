@@ -4,13 +4,14 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "razvedchik-osint"
-version = "0.4.0"
-description = "Autonomous open-source intelligence research agent"
+version = "1.0.0"
+description = "Public-source risk monitoring and analytical warning agent"
 requires-python = ">=3.10"
 dependencies = ["requests>=2.31,<3", "beautifulsoup4>=4.12,<5"]
 
 [project.scripts]
 razvedchik = "razvedchik.cli:main"
+riskwatch = "riskwatch.cli:main"
 
 [tool.setuptools.packages.find]
 where = ["src"]
