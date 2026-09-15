@@ -30,11 +30,13 @@
     "structure_score": 36,
     "interpretation": "ordered multi-stage chain is forming"
   },
+  "scenario_answer": "UNKNOWN",
   "analysis_provider": "cached",
   "model_probability": 0,
   "calibration": {
     "resolved": 0,
     "brier": null,
     "calibration_status": "insufficient_history"
-  }
+  },
+  "scenario_question": "Будут ли мужчин из мест лишения свободы, прежде всего из исправительных колоний, мобилизовывать/привлекать к военной службе после 20 сентября 2026 года?"
 }
