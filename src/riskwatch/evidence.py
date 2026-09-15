@@ -1,5 +1,6 @@
 import hashlib
-from .forecast import _eid, _root_event, _source_family, _stage, _text, _timestamp, _is_primary, TARGET_TERMS, ACTION_TERMS, SEARCH_ENGINES
+from .forecast import _eid, _source_family, _stage, _text, _timestamp, _is_primary, TARGET_TERMS, ACTION_TERMS, SEARCH_ENGINES
+from .semantics import safe_root_event, has_target, is_negative
 
 DIRECT_ROOT_TERMS=("привлечен", "привлечён", "зачислен", "зачислён", "направлен", "отправлен", "отправл", "призван", "заключил контракт", "заключен контракт", "заключён контракт", "начал службу")
 PREPARATION_TERMS=("подготов", "список", "списки", "отбор", "учет", "учёт", "медицин", "провер", "поручен", "поручён")
@@ -7,24 +8,24 @@ PREPARATION_TERMS=("подготов", "список", "списки", "отбо
 
 def _graph_stage(event):
     text=_text(event)
-    if any(term in text for term in DIRECT_ROOT_TERMS) and any(term in text for term in TARGET_TERMS):
+    if safe_root_event(event):
         return 5
-    if any(term in text for term in PREPARATION_TERMS) and any(term in text for term in TARGET_TERMS):
+    if any(term in text for term in PREPARATION_TERMS) and has_target(event) and not is_negative(event):
         if any(term in text for term in ("транспорт", "размещ", "снабж", "формирован", "комплектован")):
             return 3
         return 2
-    return _stage(event)
+    stage=_stage(event)
+    return 4 if stage == 5 else stage
 
 
 def _graph_root(event):
-    text=_text(event)
-    return any(term in text for term in DIRECT_ROOT_TERMS) and any(term in text for term in TARGET_TERMS)
+    return safe_root_event(event)
 
 
 def _usable(event):
     text=_text(event)
     family=_source_family(event)
-    return bool(family) and family not in SEARCH_ENGINES and any(term in text for term in TARGET_TERMS)
+    return bool(family) and family not in SEARCH_ENGINES and has_target(event)
 
 
 def _target_key(event):
@@ -44,9 +45,8 @@ def _same_claim(a,b):
 
 
 def _edge_type(a,b):
-    ta,tb=_text(a),_text(b)
-    negative_a=any(x in ta for x in ("опроверг","не подтверд","отменен","отменён","отказ","не планируется","ложн","фейк","исключен","исключён"))
-    negative_b=any(x in tb for x in ("опроверг","не подтверд","отменен","отменён","отказ","не планируется","ложн","фейк","исключен","исключён"))
+    negative_a=is_negative(a)
+    negative_b=is_negative(b)
     if negative_a != negative_b and _same_claim(a,b):
         return "contradiction"
     return "corroboration"
@@ -89,7 +89,7 @@ def build_evidence_graph(events,max_edges=40):
     regional_families={n["family"] for n in nodes if n["region"]}
     chain_score=max(0,min(100,min(25,len(families)*8)+min(20,primary_nodes*10)+min(25,ordered_edges*10)+min(15,root_nodes*15)+min(10,len(regional_families)*3)-min(30,contradiction_count*10)))
     fingerprint=hashlib.sha256(("|".join(sorted(n["id"] for n in nodes))+"#"+"|".join(f"{e['from']}:{e['to']}:{e['type']}" for e in edges)).encode()).hexdigest()[:16]
-    return {"version":1,"nodes":nodes[:80],"edges":edges,"metrics":{"nodes":len(nodes),"edges":len(edges),"source_families":len(families),"primary_nodes":primary_nodes,"root_nodes":root_nodes,"ordered_support_edges":ordered_edges,"contradictions":contradiction_count,"regional_families":len(regional_families),"chain_score":chain_score},"fingerprint":fingerprint}
+    return {"version":2,"nodes":nodes[:80],"edges":edges,"metrics":{"nodes":len(nodes),"edges":len(edges),"source_families":len(families),"primary_nodes":primary_nodes,"root_nodes":root_nodes,"ordered_support_edges":ordered_edges,"contradictions":contradiction_count,"regional_families":len(regional_families),"chain_score":chain_score},"fingerprint":fingerprint}
 
 
 def compact_chain(graph):
