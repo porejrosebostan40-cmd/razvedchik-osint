@@ -45,6 +45,22 @@ def _collect_one(item):
         return []
 
 
+def _throttled_decision(store, events):
+    previous=store.last_decision()
+    if previous:
+        return {
+            "probability":int(previous.get("probability",0)),
+            "confidence":int(previous.get("confidence",0)),
+            "risk":int(previous.get("risk",0)),
+            "decision":previous.get("decision","WATCH"),
+            "reason":"AI call throttled; previous decision reused",
+            "signals":previous.get("signals",[]),
+            "missing_indicators":previous.get("missing_indicators",[]),
+            "analysis_provider":"cached",
+        }
+    return analyze(events)
+
+
 def telegram(text):
     if not SETTINGS.telegram_token or not SETTINGS.telegram_chat_id:
         return
@@ -67,7 +83,11 @@ def run():
         for future in as_completed(futures):
             events.extend(future.result())
     store.add_events(events)
-    decision=analyze(store.recent(120))
+    if store.ai_due():
+        store.mark_ai_attempt()
+        decision=analyze(store.recent(120))
+    else:
+        decision=_throttled_decision(store,events)
     store.save_decision(decision)
     p=int(decision.get("probability",0))
     risk=int(decision.get("risk",0))
