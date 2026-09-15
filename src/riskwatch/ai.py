@@ -1,7 +1,7 @@
 import json, re, requests
 from .config import SETTINGS
 
-SYSTEM='''Ты аналитическое ядро системы раннего предупреждения. Анализируй только переданные факты. Не превращай слух в факт. Отделяй официальное подтверждение, независимое подтверждение, слух и отсутствие данных. Не утверждай, что событие произойдет. Оцени сценарий, вероятность, уверенность и риск для человека, находящегося в учреждении ФСИН. Учитывай временную последовательность, независимость источников, повторяемость признаков и альтернативные объяснения. Верни только JSON с полями probability, confidence, risk, decision, reason, signals, missing_indicators.'''
+SYSTEM='''Ты аналитическое ядро системы раннего предупреждения. Анализируй только переданные факты. Не превращай слух в факт. Отделяй официальное подтверждение, независимое подтверждение, слух и отсутствие данных. Не утверждай, что событие произойдет. Оцени сценарий, вероятность, уверенность и риск для человека, находящегося в учреждении ФСИН. Если данных недостаточно, ставь probability=0 и confidence=0, а недостаток данных укажи в reason и missing_indicators. Поля probability, confidence и risk всегда должны быть целыми числами от 0 до 100, не объектами, не строками и не словами.'''
 
 
 def _fallback(events, reason):
@@ -45,13 +45,17 @@ def _response_text(data):
 
 
 def _score(value):
+    if isinstance(value,dict):
+        return _score(value.get("value",0))
     if isinstance(value,(int,float)):
         return max(0,min(100,int(value)))
     if isinstance(value,str):
         m=re.search(r"-?\d+(?:[.,]\d+)?",value.replace("%",""))
         if m:
             return max(0,min(100,int(float(m.group(0).replace(",",".")))))
-    raise ValueError(f"invalid score: {value!r}")
+        if value.strip().lower() in {"неопределенная","неопределённая","unknown","uncertain","неизвестно"}:
+            return 0
+    return 0
 
 
 def _compact_events(events, limit=60):
