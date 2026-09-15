@@ -6,8 +6,9 @@ from .config import SETTINGS, REGIONS, SOURCE_TEMPLATES, REGIONAL_TEMPLATES, COR
 from .search import search
 from .store import Store
 from .ai import analyze
-from .forecast import build_forecast, forecast_record, resolve_forecasts, calibration_summary, calibrate_probability, render_context, _stage, _root_event
+from .forecast import build_forecast, forecast_record, calibration_summary, calibrate_probability, render_context, _stage, _root_event, _timestamp, _brier
 from .evidence import build_evidence_graph, compact_chain
+from .semantics import safe_root_event
 
 BATCH_SIZE = 30
 MAX_WORKERS = 8
@@ -72,7 +73,7 @@ def telegram(text):
 
 
 def _evidence_ids(events):
-    relevant = [e for e in events if _stage(e) > 0 or _root_event(e)]
+    relevant = [e for e in events if _stage(e) > 0 or safe_root_event(e)]
     relevant = sorted(relevant, key=lambda e: (_stage(e), e.get('published_ts', e.get('published', e.get('date', 0)))), reverse=True)[:20]
     return [hashlib.sha256((str(e.get('url', '')) + '|' + str(e.get('title', ''))).encode()).hexdigest()[:16] for e in relevant]
 
@@ -84,17 +85,70 @@ def _episode_duplicate(store, forecast, evidence_ids):
     return any(r.get('evidence_fingerprint') == fp and now - float(r.get('created_ts', 0)) < 6 * 3600 for r in recent)
 
 
+def _root_outcome(events, start_ts, end_ts):
+    """Resolve only on a conservative target-specific military root event with known time."""
+    for e in events:
+        ts = _timestamp(e)
+        if not ts:
+            continue
+        if ts < start_ts or ts > end_ts:
+            continue
+        if safe_root_event(e):
+            return True
+    return False
+
+
+def _resolve_forecasts(records, events, now=None):
+    now = float(now if now is not None else datetime.now(timezone.utc).timestamp())
+    out = []
+    for rec in records:
+        if rec.get('resolved') or now < float(rec.get('deadline_ts', 0)):
+            out.append(rec)
+            continue
+        start = float(rec.get('created_ts', 0))
+        deadline = float(rec.get('deadline_ts', now))
+        outcome = 1 if _root_outcome(events, start, deadline) else 0
+        rec = dict(rec)
+        raw = rec.get('raw_probability', rec.get('probability', 0))
+        issued = rec.get('issued_probability', raw)
+        rec.update({'resolved': True, 'outcome': outcome, 'resolved_ts': now, 'brier': _brier(raw, outcome), 'issued_brier': _brier(issued, outcome)})
+        out.append(rec)
+    return out
+
+
+def _retrieval_telemetry(items, collected):
+    regional_items = [x for x in items if x[0].startswith(('regional', 'region')) or ': ' in x[0]]
+    with_results = sum(bool(collected.get(i, [])) for i in range(len(items)))
+    regional_with_results = sum(bool(collected.get(i, [])) for i, item in enumerate(items) if item in regional_items)
+    attempted = len(items)
+    score = round(100 * with_results / attempted, 1) if attempted else 0.0
+    return {
+        'queries_attempted': attempted,
+        'queries_with_results': with_results,
+        'regional_queries_attempted': len(regional_items),
+        'regional_queries_with_results': regional_with_results,
+        'result_count': sum(len(v) for v in collected.values()),
+        'retrieval_coverage_score': score,
+        'coverage_is_retrieval_not_reality': True,
+    }
+
+
 def run():
     store = Store()
     events = []
+    items = _queries()
+    collected = {}
     with ThreadPoolExecutor(max_workers=MAX_WORKERS) as pool:
-        futures = [pool.submit(_collect_one, item) for item in _queries()]
+        futures = {pool.submit(_collect_one, item): i for i, item in enumerate(items)}
         for future in as_completed(futures):
-            events.extend(future.result())
+            i = futures[future]
+            result = future.result()
+            collected[i] = result
+            events.extend(result)
 
     store.add_events(events)
     all_events = store.recent(3000)
-    resolved = resolve_forecasts(store.forecasts(), all_events)
+    resolved = _resolve_forecasts(store.forecasts(), all_events)
     if resolved != store.forecasts():
         store.replace_forecasts(resolved)
 
@@ -102,6 +156,7 @@ def run():
     graph = build_evidence_graph(all_events)
     chain = compact_chain(graph)
     pattern['evidence_chain'] = chain
+    pattern['retrieval'] = _retrieval_telemetry(items, collected)
     calibration = calibration_summary(resolved)
     if store.ai_due():
         store.mark_ai_attempt()
@@ -114,14 +169,15 @@ def run():
     model_probability = int(decision.get('probability', 0))
     horizon = pattern.get('next_event_horizon')
     cal = calibrate_probability(model_probability, resolved, horizon=horizon)
-    calibrated_probability = float(cal.get('probability', 0))
-    issued_probability = calibrated_probability if cal.get('status') in ('preliminary', 'measured') else 0.0
+    calibrated = cal.get('status') in ('preliminary', 'measured')
+    calibrated_probability = float(cal.get('probability')) if calibrated else None
+    issued_probability = calibrated_probability if calibrated else None
 
     decision['model_probability'] = model_probability
     decision['probability'] = issued_probability
     decision['probability_calibration'] = cal
     decision['model_risk'] = int(decision.get('risk', 0))
-    decision['risk'] = round(issued_probability) if issued_probability else 0
+    decision['risk'] = round(issued_probability) if calibrated else None
     decision['pattern'] = pattern
     decision['calibration'] = calibration
     decision['evidence_chain'] = chain
@@ -135,15 +191,15 @@ def run():
         store.save_forecast(forecast_record(pattern, model_probability, evidence_ids=evidence_ids, calibrated_probability=issued_probability))
     store.save_decision(decision)
 
-    p = float(decision.get('probability', 0))
+    p = float(decision.get('probability')) if decision.get('probability') is not None else None
     c = int(decision.get('confidence', 0))
     answer = decision.get('scenario_answer', 'UNKNOWN')
-    calibrated = cal.get('status') in ('preliminary', 'measured')
     structural_warning = (not calibrated and int(pattern.get('evidence_score', 0)) >= 75 and int(pattern.get('structure_score', 0)) >= 65 and int(chain.get('metrics', {}).get('chain_score', 0)) >= 55)
     if (calibrated and p >= SETTINGS.alert_threshold) or structural_warning:
         alert_type = 'CALIBRATED_RISK_ALERT' if calibrated else 'STRUCTURAL_WARNING_UNCALIBRATED'
-        telegram('RISKWATCH %s\n\n%s\n\nОтвет системы: %s\nКалиброванная вероятность: %s%%\nМодельная некалиброванная оценка: %s%%\nМодельный риск: %s/100\nУверенность модели: %s%%\n\nСледующий вероятный шаг: %s\nГоризонт: %s\nЦепь доказательств: %s/100\n\n%s\n\nСигналы: %s\nОтсутствующие индикаторы: %s' % (
-            alert_type, SCENARIO_QUESTION, answer, p, decision.get('model_probability', 0), decision.get('model_risk', 0), c,
+        probability_text = f'{p:.1f}%' if p is not None else 'UNAVAILABLE'
+        telegram('RISKWATCH %s\n\n%s\n\nОтвет системы: %s\nКалиброванная вероятность: %s\nМодельная некалиброванная оценка: %s%%\nМодельный риск: %s/100\nУверенность модели: %s%%\n\nСледующий вероятный шаг: %s\nГоризонт: %s\nЦепь доказательств: %s/100\n\n%s\n\nСигналы: %s\nОтсутствующие индикаторы: %s' % (
+            alert_type, SCENARIO_QUESTION, answer, probability_text, decision.get('model_probability', 0), decision.get('model_risk', 0), c,
             decision.get('next_event', 'UNKNOWN'), decision.get('horizon', 'UNKNOWN'), chain.get('metrics', {}).get('chain_score', 0), decision.get('reason', ''),
             '; '.join(decision.get('signals', [])[:6]), '; '.join(decision.get('missing_indicators', [])[:6])
         ))
