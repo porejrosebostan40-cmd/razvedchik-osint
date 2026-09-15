@@ -1,0 +1,28 @@
+name: OpenAI Smoke Test
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  smoke:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Verify OpenAI secret is available and accepted
+        env:
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+        run: |
+          test -n "$OPENAI_API_KEY"
+          code=$(curl -sS -o /tmp/openai-models.json -w "%{http_code}" \
+            https://api.openai.com/v1/models \
+            -H "Authorization: Bearer $OPENAI_API_KEY")
+          test "$code" = "200"
+          python - <<'PY'
+          import json
+          with open('/tmp/openai-models.json', encoding='utf-8') as f:
+              data=json.load(f)
+          assert isinstance(data.get('data'), list)
+          print('OpenAI API authentication: OK')
+          print('Available models returned:', len(data['data']))
+          PY
