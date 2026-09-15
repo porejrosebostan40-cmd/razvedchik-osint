@@ -1,6 +1,6 @@
 import hashlib, json, os, time
 
-MAX_EVENTS = 10000
+MAX_EVENTS = 3000
 MAX_DECISIONS = 500
 AI_INTERVAL_SECONDS = 3600
 
