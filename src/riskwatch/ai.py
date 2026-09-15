@@ -58,16 +58,29 @@ def _score(value):
     return 0
 
 
-def _compact_events(events, limit=60):
+def _compact_events(events, limit=20):
+    selected=[]
+    seen_kinds=set()
+    for e in reversed(events):
+        kind=str(e.get("kind",""))
+        if kind not in seen_kinds:
+            selected.append(e); seen_kinds.add(kind)
+        if len(selected)>=10:
+            break
+    for e in reversed(events):
+        if e not in selected:
+            selected.append(e)
+        if len(selected)>=limit:
+            break
     compact=[]
-    for e in events[-limit:]:
+    for e in selected:
         compact.append({
-            "url":str(e.get("url",""))[:1000],
-            "title":str(e.get("title",""))[:500],
-            "snippet":str(e.get("snippet",""))[:700],
-            "region":str(e.get("region",""))[:120],
-            "kind":str(e.get("kind",""))[:160],
-            "source":str(e.get("source",""))[:80],
+            "url":str(e.get("url",""))[:700],
+            "title":str(e.get("title",""))[:300],
+            "snippet":str(e.get("snippet",""))[:400],
+            "region":str(e.get("region",""))[:100],
+            "kind":str(e.get("kind",""))[:120],
+            "source":str(e.get("source",""))[:60],
         })
     return compact
 
@@ -81,6 +94,7 @@ def analyze(events):
         "instructions":SYSTEM,
         "input":("Return only valid JSON. " + json.dumps({"scenario":"мобилизационные или связанные с ФСИН действия после 20 сентября 2026 года","events":compact_events},ensure_ascii=False)),
         "text":{"format":{"type":"json_object"}},
+        "max_output_tokens":1200,
         "store":False
     }
     try:
