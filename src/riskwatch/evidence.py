@@ -5,7 +5,6 @@ from .semantics import safe_root_event, has_target, is_negative
 DIRECT_ROOT_TERMS=("привлечен", "привлечён", "зачислен", "зачислён", "направлен", "отправлен", "отправл", "призван", "заключил контракт", "заключен контракт", "заключён контракт", "начал службу")
 PREPARATION_TERMS=("подготов", "список", "списки", "отбор", "учет", "учёт", "медицин", "провер", "поручен", "поручён")
 
-
 def _graph_stage(event):
     text=_text(event)
     if safe_root_event(event): return 5
@@ -15,34 +14,26 @@ def _graph_stage(event):
     stage=_stage(event)
     return 4 if stage == 5 else stage
 
-
 def _graph_root(event): return safe_root_event(event)
-
 def _usable(event):
     family=_source_family(event)
     return bool(family) and family not in SEARCH_ENGINES and has_target(event)
-
 def _target_key(event):
     text=_text(event)
     return tuple(sorted(set(term for term in TARGET_TERMS if term in text)))
-
 def _claim_key(event):
     text=_text(event)
     return tuple(sorted(set(term for term in ACTION_TERMS if term in text)))
-
 def _same_claim(a,b):
     return bool(set(_target_key(a)) & set(_target_key(b))) and bool(set(_claim_key(a)) & set(_claim_key(b)))
-
 def _edge_type(a,b):
     if is_negative(a) != is_negative(b) and _same_claim(a,b): return "contradiction"
     return "corroboration"
-
 def _compatible_order(a,b):
-    sa,sb=_graph_stage(a),_graph_stage(b)
-    ta,tb=_timestamp(a),_timestamp(b)
-    if sa==sb: return (not ta or not tb) or abs(tb-ta)<=14*86400
-    if ta and tb: return sa<sb and ta<=tb
-    return sa<sb
+    sa,sb=_graph_stage(a),_graph_stage(b); ta,tb=_timestamp(a),_timestamp(b)
+    if ta and tb: return sa < sb and ta <= tb
+    if sa==sb: return True
+    return sa < sb
 
 def build_evidence_graph(events,max_edges=40):
     events=list(events or []); usable=[e for e in events if _usable(e)]; nodes=[]
