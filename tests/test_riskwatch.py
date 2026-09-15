@@ -114,6 +114,17 @@ def test_pattern_engine_does_not_turn_one_event_into_high_structure():
     assert f["structure_score"] < 40
 
 
+def test_probability_cannot_run_far_ahead_of_pattern_strength():
+    from riskwatch.ai import _validate, _eid
+    events=[{"url":"https://example.org/a","title":"Правительство изменило порядок","kind":"policy"},
+            {"url":"https://example.net/b","title":"Приказ опубликован","kind":"order"}]
+    ids=[_eid(e) for e in events]
+    result={"probability":99,"confidence":99,"risk":99,"facts":[{"text":"facts","event_ids":ids}],"inferences":[{"text":"inference","event_ids":ids}],"evidence_event_ids":ids,"missing_indicators":[]}
+    d=_validate(result,events)
+    assert d["probability"] <= 70
+    assert d["confidence"] <= d["probability"]
+
+
 def test_regional_rotation_changes_each_20_minute_slot():
     from riskwatch.runner import _queries
     a=_queries(datetime(2026, 9, 15, 12, 0, tzinfo=timezone.utc))
