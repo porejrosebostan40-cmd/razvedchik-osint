@@ -78,10 +78,8 @@ def analyze(events):
     compact_events=_compact_events(events)
     payload={
         "model":SETTINGS.openai_model,
-        "input":[
-            {"role":"system","content":SYSTEM},
-            {"role":"user","content":json.dumps({"scenario":"мобилизационные или связанные с ФСИН действия после 20 сентября 2026 года","events":compact_events},ensure_ascii=False)}
-        ],
+        "instructions":SYSTEM,
+        "input":json.dumps({"scenario":"мобилизационные или связанные с ФСИН действия после 20 сентября 2026 года","events":compact_events},ensure_ascii=False),
         "text":{"format":{"type":"json_object"}},
         "store":False
     }
@@ -102,7 +100,10 @@ def analyze(events):
         return result
     except requests.HTTPError as exc:
         status=getattr(exc.response,"status_code",None)
-        return _fallback(events,f"OpenAI analysis failed: HTTPError status={status}; deterministic fallback used")
+        body=""
+        try: body=exc.response.text[:300]
+        except Exception: pass
+        return _fallback(events,f"OpenAI analysis failed: HTTPError status={status} body={body}; deterministic fallback used")
     except (requests.RequestException, ValueError, TypeError, KeyError) as exc:
         detail=str(exc).replace("\n"," ")[:300]
         return _fallback(events,f"OpenAI analysis failed: {type(exc).__name__}: {detail}; deterministic fallback used")
