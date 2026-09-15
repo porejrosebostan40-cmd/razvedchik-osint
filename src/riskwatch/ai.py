@@ -2,7 +2,7 @@ import hashlib, json, re, requests
 from urllib.parse import urlsplit
 from .config import SETTINGS
 from .forecast import build_forecast, render_context
-from .methodology import METHODOLOGY_TEXT, HEURISTICS, SOURCE_RULES, SEARCH_SEQUENCE, POSITIVE_INDICATORS, NEGATIVE_INDICATORS, OUTPUT_RULES
+from .methodology import METHODOLOGY_TEXT
 
 SCENARIO_ID='prisoner_mobilization'
 SCENARIO_QUESTION='Будут ли мужчин из мест лишения свободы, прежде всего из исправительных колоний, мобилизовывать/привлекать к военной службе после 20 сентября 2026 года?'
@@ -20,6 +20,8 @@ SYSTEM='''Ты аналитическое ядро системы раннего
 Обязательно анализируй обе стороны гипотезы: признаки движения К СЦЕНАРИЮ и признаки движения ОТ СЦЕНАРИЯ. Отсутствие ожидаемого следующего шага является отрицательным доказательством только тогда, когда этот шаг должен был быть наблюдаемым в рассматриваемом горизонте.
 
 Различай два прогноза: (1) вероятность основного сценария и (2) вероятность следующего наблюдаемого шага. Это разные величины и их нельзя смешивать.
+
+Ниже передаётся компактный deterministic evidence graph. Он является ограничителем: модель не имеет права создавать связь между событиями, которой нет в графе, или ссылаться на отсутствующий event_id. Graph — не источник новых фактов, а проверка происхождения и последовательности уже собранных событий.
 
 Используй накопленную методику ниже как обязательный протокол, а не как справочную подсказку. Не выдумывай дополнительные правила, источники или факты. Если доказательств недостаточно — UNKNOWN.
 
@@ -68,12 +70,12 @@ def _score(v):
         if m:return max(0,min(100,int(float(m.group(0).replace(',','.')))))
     return 0
 
-def _compact_events(events,limit=24):
+def _compact_events(events,limit=18):
     out=[]; seen=set()
     for e in reversed(events):
         eid=_eid(e)
         if eid in seen:continue
-        out.append({'event_id':eid,'url':str(e.get('url',''))[:400],'title':str(e.get('title',''))[:180],'snippet':str(e.get('snippet',''))[:400],'region':str(e.get('region',''))[:80],'kind':str(e.get('kind',''))[:100]}); seen.add(eid)
+        out.append({'event_id':eid,'url':str(e.get('url',''))[:320],'title':str(e.get('title',''))[:160],'snippet':str(e.get('snippet',''))[:320],'region':str(e.get('region',''))[:60],'kind':str(e.get('kind',''))[:60]}); seen.add(eid)
         if len(out)>=limit:break
     return out
 
@@ -105,8 +107,16 @@ def _validate(result,events,forecast=None):
 
 def analyze(events):
     forecast=build_forecast(events)
+    try:
+        from .evidence import build_evidence_graph, compact_chain
+        chain=compact_chain(build_evidence_graph(events))
+        forecast['evidence_chain']=chain
+    except Exception as e:
+        forecast['evidence_chain']={'version':1,'metrics':{},'support_edges':[],'contradiction_edges':[],'fingerprint':'','error':type(e).__name__}
     if not SETTINGS.openai_api_key:return _fallback(events,'OPENAI_API_KEY is not configured',forecast)
-    payload={'model':SETTINGS.openai_model,'instructions':SYSTEM,'input':('Return only JSON. '+render_context(forecast)+'\n'+json.dumps({'scenario_id':SCENARIO_ID,'scenario_question':SCENARIO_QUESTION,'methodology_rules':{'source_rules':SOURCE_RULES,'search_sequence':SEARCH_SEQUENCE,'positive_indicators':POSITIVE_INDICATORS,'negative_indicators':NEGATIVE_INDICATORS,'heuristics':HEURISTICS,'output_rules':OUTPUT_RULES},'events':_compact_events(events)},ensure_ascii=False)),'text':{'format':{'type':'json_object'}},'max_output_tokens':1400,'store':False}
+    compact=_compact_events(events)
+    context={'scenario_id':SCENARIO_ID,'scenario_question':SCENARIO_QUESTION,'pattern':{k:v for k,v in forecast.items() if k!='_events'},'evidence_chain':forecast.get('evidence_chain',{}),'events':compact}
+    payload={'model':SETTINGS.openai_model,'instructions':SYSTEM,'input':'Return only JSON. Analyze only the evidence below. '+json.dumps(context,ensure_ascii=False,separators=(',',':')),'text':{'format':{'type':'json_object'}},'max_output_tokens':1100,'store':False}
     try:
         r=requests.post('https://api.openai.com/v1/responses',headers={'Authorization':f'Bearer {SETTINGS.openai_api_key}','Content-Type':'application/json'},json=payload,timeout=60); r.raise_for_status(); result=_extract_json(_response_text(r.json()))
         if not isinstance(result,dict):raise ValueError('model JSON is not object')
