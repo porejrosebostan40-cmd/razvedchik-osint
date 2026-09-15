@@ -14,10 +14,10 @@
   "model_risk": 0,
   "confidence": 0,
   "analysis_provider": "fallback",
-  "reason": "OpenAI HTTP failure: 429 {\n  \"error\": {\n    \"message\": \"Rate limit reached for gpt-5.6-luna in organization org-MYHgoY7mWZFMbaJpA0Uo7t70 on tokens per min (TPM): Limit 100000, Used 99783, Requested 8904. Please try again in 62h32m47.04s. Visit https://platform.openai.com/account/rate-limits to learn more. You can increase y",
+  "reason": "OpenAI HTTP failure: 429 {\n  \"error\": {\n    \"message\": \"Rate limit reached for gpt-5.6-luna in organization org-MYHgoY7mWZFMbaJpA0Uo7t70 on tokens per min (TPM): Limit 100000, Used 99490, Requested 6328. Please try again in 41h53m22.56s. Visit https://platform.openai.com/account/rate-limits to learn more. You can increase y",
   "signals": [
-    "pattern_stage=0",
-    "structure_score=17"
+    "pattern_stage=4",
+    "structure_score=28"
   ],
   "missing_indicators": [
     "прямое решение о мобилизации/привлечении мужчин из ИК",
