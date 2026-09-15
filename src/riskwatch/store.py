@@ -2,6 +2,7 @@ import hashlib, json, os, time
 
 MAX_EVENTS = 3000
 MAX_DECISIONS = 500
+MAX_FORECASTS = 1000
 AI_INTERVAL_SECONDS = 3600
 
 class Store:
@@ -10,9 +11,10 @@ class Store:
         try:
             with open(self.path,encoding="utf-8") as f: self.data=json.load(f)
         except (FileNotFoundError,json.JSONDecodeError):
-            self.data={"events":{},"decisions":[],"last_ai_ts":0}
+            self.data={"events":{},"decisions":[],"forecasts":[],"last_ai_ts":0}
         self.data.setdefault("events",{})
         self.data.setdefault("decisions",[])
+        self.data.setdefault("forecasts",[])
         self.data.setdefault("last_ai_ts",0)
 
     def add_events(self,events):
@@ -42,6 +44,18 @@ class Store:
     def save_decision(self,d):
         self.data["decisions"].append({"ts":time.time(),**d})
         self.data["decisions"]=self.data["decisions"][-MAX_DECISIONS:]
+        self._save()
+
+    def forecasts(self):
+        return self.data["forecasts"]
+
+    def save_forecast(self,record):
+        self.data["forecasts"].append({**record,"created_ts":record.get("created_ts",time.time())})
+        self.data["forecasts"]=self.data["forecasts"][-MAX_FORECASTS:]
+        self._save()
+
+    def replace_forecasts(self,records):
+        self.data["forecasts"]=list(records)[-MAX_FORECASTS:]
         self._save()
 
     def _save(self):
