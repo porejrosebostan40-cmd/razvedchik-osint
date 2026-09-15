@@ -1,7 +1,5 @@
 name: RiskWatch AI Smoke Test
 on:
-  push:
-    branches: [main]
   workflow_dispatch:
 permissions:
   contents: read
@@ -22,14 +20,7 @@ jobs:
         run: |
           python - <<'PY'
           from riskwatch.ai import analyze
-          result=analyze([{
-              "url":"https://example.org/test",
-              "title":"Test signal",
-              "snippet":"Test signal for RiskWatch AI integration",
-              "region":"",
-              "kind":"smoke",
-              "source":"smoke",
-          }])
+          result=analyze([{"url":"https://example.org/test","title":"Test signal","snippet":"Test signal for RiskWatch AI integration","region":"","kind":"smoke","source":"smoke"}])
           print(result)
           assert result.get("analysis_provider") == "openai", result
           assert all(0 <= int(result[k]) <= 100 for k in ("probability","confidence","risk"))
