@@ -1,17 +1,17 @@
-import hashlib, json, sqlite3, time
-from .config import SETTINGS
+import hashlib, json, os, time
 class Store:
     def __init__(self,path=None):
-        self.db=sqlite3.connect(path or SETTINGS.db_path); self.db.row_factory=sqlite3.Row
-        self.db.executescript('CREATE TABLE IF NOT EXISTS events(id TEXT PRIMARY KEY,ts REAL,source TEXT,url TEXT,title TEXT,snippet TEXT,query TEXT,region TEXT,kind TEXT); CREATE TABLE IF NOT EXISTS decisions(id INTEGER PRIMARY KEY,ts REAL,risk INTEGER,probability INTEGER,confidence INTEGER,decision TEXT,reason TEXT,raw TEXT);'); self.db.commit()
+        self.path=path or os.getenv("RISKWATCH_STATE","riskwatch_state.json")
+        try: self.data=json.load(open(self.path,encoding="utf-8"))
+        except (FileNotFoundError,json.JSONDecodeError): self.data={"events":{},"decisions":[]}
     def add_events(self,events):
         n=0
         for e in events:
-            eid=hashlib.sha256((e['url']+'|'+e['title']).encode()).hexdigest()
-            try:
-                self.db.execute('INSERT INTO events VALUES(?,?,?,?,?,?,?,?,?)',(eid,time.time(),e.get('source',''),e.get('url',''),e.get('title',''),e.get('snippet',''),e.get('query',''),e.get('region',''),e.get('kind',''))); n+=1
-            except sqlite3.IntegrityError: pass
-        self.db.commit(); return n
-    def recent(self,limit=80): return [dict(x) for x in self.db.execute('SELECT * FROM events ORDER BY ts DESC LIMIT ?',(limit,)).fetchall()]
+            eid=hashlib.sha256((e.get('url','')+'|'+e.get('title','')).encode()).hexdigest()
+            if eid not in self.data["events"]: self.data["events"][eid]={**e,"ts":time.time()}; n+=1
+        self._save(); return n
+    def recent(self,limit=120): return sorted(self.data["events"].values(),key=lambda x:x.get("ts",0))[-limit:]
     def save_decision(self,d):
-        self.db.execute('INSERT INTO decisions(ts,risk,probability,confidence,decision,reason,raw) VALUES(?,?,?,?,?,?,?)',(time.time(),d.get('risk',0),d.get('probability',0),d.get('confidence',0),d.get('decision',''),d.get('reason',''),json.dumps(d,ensure_ascii=False))); self.db.commit()
+        self.data["decisions"].append({"ts":time.time(),**d}); self.data["decisions"]=self.data["decisions"][-500:]; self._save()
+    def _save(self):
+        tmp=self.path+'.tmp'; json.dump(self.data,open(tmp,'w',encoding='utf-8'),ensure_ascii=False,indent=2); os.replace(tmp,self.path)
