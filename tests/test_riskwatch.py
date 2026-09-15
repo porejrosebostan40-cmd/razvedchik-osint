@@ -17,6 +17,25 @@ def test_source_matrix_contains_independent_and_public_sources():
     assert {"Reuters","ТАСС","РИА Новости","Интерфакс","РБК","Медиазона","Telegram public","VK public","YouTube public"}.issubset(names)
 
 
+def test_accumulated_methodology_is_loaded_by_ai():
+    from riskwatch.ai import SYSTEM, METHODOLOGY_TEXT
+    from riskwatch.methodology import HEURISTICS, SOURCE_RULES, SEARCH_SEQUENCE, POSITIVE_INDICATORS, NEGATIVE_INDICATORS
+    assert METHODOLOGY_TEXT in SYSTEM
+    assert len(SOURCE_RULES) >= 5
+    assert len(SEARCH_SEQUENCE) >= 8
+    assert len(POSITIVE_INDICATORS) >= 6
+    assert len(NEGATIVE_INDICATORS) >= 4
+    assert "Do not equate discussion" in HEURISTICS
+    assert "root scenario" in SYSTEM.lower()
+
+
+def test_methodology_has_target_specific_final_stage():
+    from riskwatch.methodology import STAGES
+    assert STAGES[-1][0] == 5
+    assert "root_scenario" == STAGES[-1][1]
+    assert "correctional institutions" in STAGES[-1][2]
+
+
 def test_store_roundtrip():
     from riskwatch.store import Store
     with tempfile.TemporaryDirectory() as d:
