@@ -56,6 +56,10 @@ def _throttled_decision(store, events):
             "reason":"AI call throttled; previous decision reused",
             "signals":previous.get("signals",[]),
             "missing_indicators":previous.get("missing_indicators",[]),
+            "next_event":previous.get("next_event","UNKNOWN"),
+            "horizon":previous.get("horizon","UNKNOWN"),
+            "forecast_basis":previous.get("forecast_basis",""),
+            "pattern":previous.get("pattern",{}),
             "analysis_provider":"cached",
         }
     return analyze(events)
@@ -97,10 +101,10 @@ def run():
             "RISKWATCH ALERT\n\n"
             "Сценарий: мобилизационные/связанные с ФСИН действия после 20.09.2026\n"
             "Вероятность: %s%%\nРиск: %s/100\nУверенность: %s%%\n"
-            "Решение: %s\n\n%s\n\nСигналы: %s\n"
-            "Отсутствующие индикаторы: %s" % (
-                p,risk,c,decision.get('decision',''),decision.get('reason',''),
-                '; '.join(decision.get('signals',[])[:6]),
+            "Решение: %s\n\nСледующий вероятный шаг: %s\nГоризонт: %s\n\n"
+            "%s\n\nСигналы: %s\nОтсутствующие индикаторы: %s" % (
+                p,risk,c,decision.get('decision',''),decision.get('next_event','UNKNOWN'),decision.get('horizon','UNKNOWN'),
+                decision.get('reason',''),'; '.join(decision.get('signals',[])[:6]),
                 '; '.join(decision.get('missing_indicators',[])[:6])
             )
         )
