@@ -15,7 +15,6 @@ SYSTEM='''Ты аналитическое ядро системы раннего
 Не повышай probability только из-за регионального охвата или количества публикаций.
 Верни только JSON с полями: probability, confidence, risk, decision, reason, facts, inferences, evidence_event_ids, missing_indicators, next_event, horizon, forecast_basis.
 '''
-
 PRIMARY_DOMAINS=('kremlin.ru','government.ru','mil.ru','fsin.gov.ru','minjust.gov.ru','duma.gov.ru','council.gov.ru','publication.pravo.gov.ru')
 
 
@@ -116,13 +115,15 @@ def _validate(result, events, forecast=None):
     primary=bool(primary_domains)
 
     p=_score(result.get('probability',0)); c=_score(result.get('confidence',0)); r=_score(result.get('risk',0))
-    # The model cannot exceed the deterministic evidence-quality ceiling.
     if not corroborated: p=min(p,60); c=min(c,50)
     elif not primary: p=min(p,85); c=min(c,70)
     else: p=min(p,95); c=min(c,90)
-    # An unformed pattern cannot receive a high scenario probability merely from scattered news.
-    if forecast.get('pattern_stage',0) < 2 and forecast.get('structure_score',0) < 40:
+    structure=forecast.get('structure_score',0)
+    if forecast.get('pattern_stage',0) < 2 and structure < 40:
         p=min(p,60); c=min(c,50)
+    # Prevent a language-model leap from outrunning the observed causal chain.
+    if structure < 70:
+        p=min(p, max(55, structure + 15))
     if c>p: c=p
 
     result['probability']=p; result['confidence']=c; result['risk']=min(r,p)
