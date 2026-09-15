@@ -103,3 +103,49 @@ def test_regional_rotation_repeats_after_full_cycle():
     from riskwatch.config import REGIONS, REGIONAL_TEMPLATES
     from riskwatch.runner import _queries
     a=_queries(datetime(2026,9,15,12,0,tzinfo=timezone.utc)); b=_queries(datetime(2026,9,15,12,0,tzinfo=timezone.utc).replace(day=15)); assert len(a)==len(b) and len(REGIONS)*len(REGIONAL_TEMPLATES)>=300
+
+def test_evidence_graph_collapses_same_family_and_ignores_search_engine():
+    from riskwatch.evidence import build_evidence_graph
+    events=[
+        {"url":"https://www.example.com/a","title":"заключенные привлечены к военной службе","snippet":"отбор"},
+        {"url":"https://news.example.com/b","title":"заключенные привлечены к военной службе","snippet":"отбор"},
+        {"url":"https://bing.com/search?q=x","title":"заключенные привлечены к военной службе","snippet":"отбор"},
+    ]
+    g=build_evidence_graph(events)
+    assert g["metrics"]["source_families"]==1 and g["metrics"]["edges"]==0
+
+def test_evidence_graph_requires_target_match():
+    from riskwatch.evidence import build_evidence_graph
+    events=[
+        {"url":"https://example.com/a","title":"заключенные привлечены к военной службе","snippet":""},
+        {"url":"https://other.net/b","title":"военнослужащие направлены на службу","snippet":""},
+    ]
+    g=build_evidence_graph(events)
+    assert g["metrics"]["edges"]==0
+
+def test_evidence_graph_requires_temporal_order_for_stage_chain():
+    from riskwatch.evidence import build_evidence_graph
+    events=[
+        {"url":"https://government.ru/a","title":"ФСИН поручено подготовить списки заключенных","snippet":"учет","published_ts":200},
+        {"url":"https://example.net/b","title":"заключенные направлены на военную службу","snippet":"военная служба","published_ts":100},
+    ]
+    g=build_evidence_graph(events)
+    assert g["metrics"]["ordered_support_edges"]==0
+
+def test_evidence_graph_strengthens_independent_primary_regional_chain():
+    from riskwatch.evidence import build_evidence_graph
+    events=[
+        {"url":"https://fsin.gov.ru/a","title":"ФСИН подготовила списки заключенных для отбора на военную службу","snippet":"учет","published_ts":100,"region":""},
+        {"url":"https://example.net/b","title":"заключенные направлены на военную службу","snippet":"военная служба","published_ts":200,"region":"Республика Северная Осетия — Алания"},
+    ]
+    g=build_evidence_graph(events)
+    assert g["metrics"]["source_families"]==2 and g["metrics"]["ordered_support_edges"]>=1 and g["metrics"]["chain_score"]>30
+
+def test_evidence_graph_penalizes_contradiction():
+    from riskwatch.evidence import build_evidence_graph
+    events=[
+        {"url":"https://government.ru/a","title":"заключенные привлечены к военной службе","snippet":"отбор","published_ts":100},
+        {"url":"https://example.net/b","title":"привлечение заключенных к военной службе не планируется","snippet":"","published_ts":200},
+    ]
+    g=build_evidence_graph(events)
+    assert g["metrics"]["contradictions"]>=1 and g["metrics"]["chain_score"]<40
