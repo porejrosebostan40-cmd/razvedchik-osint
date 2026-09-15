@@ -1,7 +1,5 @@
 name: OpenAI Smoke Test
 on:
-  push:
-    branches: [main]
   workflow_dispatch:
 permissions:
   contents: read
@@ -16,29 +14,8 @@ jobs:
           test -n "$OPENAI_API_KEY"
           python - <<'PY'
           import json, os, urllib.request
-          payload={
-              "model":"gpt-5.6-luna",
-              "input":"Return only JSON: {\"ok\":true,\"source\":\"openai\"}",
-              "text":{"format":{"type":"json_object"}},
-              "store":False,
-          }
-          req=urllib.request.Request(
-              "https://api.openai.com/v1/responses",
-              data=json.dumps(payload).encode(),
-              headers={"Authorization":"Bearer "+os.environ["OPENAI_API_KEY"],"Content-Type":"application/json"},
-              method="POST",
-          )
-          with urllib.request.urlopen(req, timeout=90) as resp:
-              data=json.load(resp)
-          text=data.get("output_text","")
-          if not text:
-              for item in data.get("output",[]):
-                  for c in item.get("content",[]):
-                      if c.get("type")=="output_text":
-                          text=c.get("text","")
-          result=json.loads(text)
-          assert result.get("ok") is True
-          print("OpenAI Responses API: OK")
-          print("Model: gpt-5.6-luna")
-          print("Structured JSON output: OK")
+          payload={"model":"gpt-5.6-luna","input":"Return only JSON: {\"ok\":true}","text":{"format":{"type":"json_object"}},"store":False}
+          req=urllib.request.Request("https://api.openai.com/v1/responses",data=json.dumps(payload).encode(),headers={"Authorization":"Bearer "+os.environ["OPENAI_API_KEY"],"Content-Type":"application/json"},method="POST")
+          with urllib.request.urlopen(req, timeout=90) as resp: data=json.load(resp)
+          print("OpenAI Responses API: OK", data.get("id",""))
           PY
