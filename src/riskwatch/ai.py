@@ -51,16 +51,6 @@ def _score(v):
         if m:return max(0,min(100,int(float(m.group(0).replace(',','.')))))
     return 0
 
-def _compact_events(events,limit=10):
-    out=[]; seen=set()
-    for e in sorted(events or [],key=lambda e:_timestamp(e) or 0,reverse=True):
-        eid=_eid(e)
-        if eid in seen:continue
-        out.append({'event_id':eid,'url':str(e.get('url',''))[:220],'title':str(e.get('title',''))[:120],'snippet':str(e.get('snippet',''))[:180],'region':str(e.get('region',''))[:40],'kind':str(e.get('kind',''))[:30]})
-        seen.add(eid)
-        if len(out)>=limit:break
-    return out
-
 def _timestamp(e):
     v=e.get('published_ts') or e.get('ts') or e.get('date') or e.get('published')
     try:return float(v)
@@ -80,14 +70,36 @@ def _has_root(e):
     direct=('привлечен','привлечён','зачислен','зачислён','направлен','отправлен','отправл','призван','заключил контракт','заключен контракт','заключён контракт','начал службу')
     return _has_target(e) and any(t in text for t in direct)
 
+def _compact_events(events,limit=10):
+    unique={_eid(e):e for e in (events or [])}
+    selected=[]; seen=set()
+    def add(e):
+        eid=_eid(e)
+        if eid in seen:return
+        selected.append({'event_id':eid,'url':str(e.get('url',''))[:220],'title':str(e.get('title',''))[:120],'snippet':str(e.get('snippet',''))[:180],'region':str(e.get('region',''))[:40],'kind':str(e.get('kind',''))[:30]})
+        seen.add(eid)
+    # Preserve decisive evidence even when it is older than the newest search results.
+    for e in sorted(unique.values(),key=lambda e: (_has_root(e), _has_target(e) and _has_action(e), _is_primary(e.get('url','')), _timestamp(e)),reverse=True):
+        if _has_root(e): add(e)
+        if len(selected)>=limit: break
+    if len(selected)<limit:
+        for e in sorted(unique.values(),key=_timestamp,reverse=True):
+            if _has_target(e) or _has_action(e): add(e)
+            if len(selected)>=limit: break
+    if len(selected)<limit:
+        for e in sorted(unique.values(),key=_timestamp,reverse=True):
+            add(e)
+            if len(selected)>=limit: break
+    return selected
+
 def _validate_claim(claim,allowed):
     if not isinstance(claim,dict) or not isinstance(claim.get('text'),str) or not isinstance(claim.get('event_ids'),list):return None
     ids=[i for i in claim['event_ids'] if isinstance(i,str) and i in allowed]
     if not ids:return None
     linked=[allowed[i] for i in ids]
-    # Second gate: a claim must be semantically anchored to target + action evidence.
-    if not any(_has_target(e) for e in linked):return None
-    if not any(_has_action(e) for e in linked):return None
+    # A claim must be anchored by at least one concrete event containing both
+    # the target population and an action relevant to military involvement.
+    if not any(_has_target(e) and _has_action(e) for e in linked):return None
     return {'text':claim['text'].strip()[:600],'event_ids':ids}
 
 def _validate(result,events,forecast=None):
