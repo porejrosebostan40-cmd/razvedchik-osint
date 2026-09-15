@@ -49,3 +49,4 @@ jobs:
         with:
           name: riskwatch-latest
           path: riskwatch_latest.json
+# validated with OpenAI Responses API smoke test
