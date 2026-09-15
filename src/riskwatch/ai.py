@@ -1,13 +1,12 @@
 import hashlib, json, re, requests
 from urllib.parse import urlsplit
 from .config import SETTINGS
-from .forecast import build_forecast, _source_family, _root_event, TARGET_TERMS, ACTION_TERMS
+from .forecast import build_forecast, _source_family, TARGET_TERMS, ACTION_TERMS
+from .semantics import safe_root_event, has_target, is_negative, safe_stage
 
 SCENARIO_ID='prisoner_mobilization'
 SCENARIO_QUESTION='Будут ли мужчин из мест лишения свободы, прежде всего из исправительных колоний, мобилизовывать/привлекать к военной службе после 20 сентября 2026 года?'
 
-# The long methodology remains deterministic in methodology.py/forecast.py.
-# Only the minimum analytical protocol is sent to the model to keep TPM bounded.
 SYSTEM='''Ты аналитическое ядро RiskWatch. Не являйся источником фактов: работай только с переданными events и deterministic evidence_chain.
 Главный вопрос неизменен: будут ли мужчин из мест лишения свободы, прежде всего из исправительных колоний, мобилизовывать/привлекать к военной службе после 20 сентября 2026 года?
 Правила: 1) FACT и INFERENCE должны ссылаться только на event_id из входа. 2) Не считай поисковик источником. 3) Не считай перепечатки независимым подтверждением. 4) Не создавай отсутствующие события, связи или документы. 5) Разделяй основной сценарий и следующий наблюдаемый этап. 6) Если доказательств недостаточно — scenario_answer=UNKNOWN. 7) Для YES нужен target-specific root signal либо согласованная цепочка, ведущая к root. 8) Для NO нужна явная отрицательная evidence; отсутствие новости само по себе не является доказательством NO. 9) Верни только JSON.
@@ -59,13 +58,11 @@ def _timestamp(e):
 def _event_text(e):
     return (str(e.get('title',''))+' '+str(e.get('snippet',''))).lower()
 
-def _has_target(e):
-    text=_event_text(e); return any(t in text for t in TARGET_TERMS)
+def _has_target(e): return has_target(e)
 def _has_action(e):
     text=_event_text(e); return any(t in text for t in ACTION_TERMS)
-def _has_negative(e):
-    text=_event_text(e); return any(t in text for t in NEGATIVE_TERMS)
-def _has_root(e): return _root_event(e)
+def _has_negative(e): return is_negative(e)
+def _has_root(e): return safe_root_event(e)
 
 def _compact_events(events,limit=10):
     unique={_eid(e):e for e in (events or [])}
@@ -75,7 +72,6 @@ def _compact_events(events,limit=10):
         if eid in seen:return
         selected.append({'event_id':eid,'url':str(e.get('url',''))[:220],'title':str(e.get('title',''))[:120],'snippet':str(e.get('snippet',''))[:180],'region':str(e.get('region',''))[:40],'kind':str(e.get('kind',''))[:30]})
         seen.add(eid)
-    # Preserve decisive evidence even when it is older than the newest search results.
     for e in sorted(unique.values(),key=lambda e: (_has_root(e), _has_target(e) and _has_action(e), _is_primary(e.get('url','')), _timestamp(e)),reverse=True):
         if _has_root(e): add(e)
         if len(selected)>=limit: break
@@ -94,8 +90,6 @@ def _validate_claim(claim,allowed):
     ids=[i for i in claim['event_ids'] if isinstance(i,str) and i in allowed]
     if not ids:return None
     linked=[allowed[i] for i in ids]
-    # A claim must be anchored by at least one concrete event containing both
-    # the target population and an action relevant to military involvement.
     if not any(_has_target(e) and _has_action(e) for e in linked):return None
     return {'text':claim['text'].strip()[:600],'event_ids':ids}
 
@@ -127,7 +121,7 @@ def _validate(result,events,forecast=None):
     if answer=='YES' and not any(_has_root(e) for e in linked_events):answer='UNKNOWN'
     if answer=='NO' and not any(_has_negative(e) for e in linked_events):answer='UNKNOWN'
     if c>p:c=p
-    result.update({'scenario_id':SCENARIO_ID,'scenario_question':SCENARIO_QUESTION,'scenario_answer':answer,'probability':p,'confidence':c,'risk':min(r,p),'facts':facts,'inferences':inf,'evidence_event_ids':used,'missing_indicators':result.get('missing_indicators',[]) if isinstance(result.get('missing_indicators',[]),list) else [],'next_event':str(result.get('next_event','UNKNOWN'))[:500] or 'UNKNOWN','horizon':str(result.get('horizon','UNKNOWN'))[:100] or 'UNKNOWN','forecast_basis':str(result.get('forecast_basis',''))[:900],'pattern':forecast,'hallucination_guard':'passed_evidence_gate_v2','evidence_quality':'corroborated_primary' if corroborated and primary else ('corroborated' if corroborated else 'single_source_or_nonindependent'),'evidence_domains':sorted(domains),'evidence_families':len(families)})
+    result.update({'scenario_id':SCENARIO_ID,'scenario_question':SCENARIO_QUESTION,'scenario_answer':answer,'probability':p,'confidence':c,'risk':min(r,p),'facts':facts,'inferences':inf,'evidence_event_ids':used,'missing_indicators':result.get('missing_indicators',[]) if isinstance(result.get('missing_indicators',[]),list) else [],'next_event':str(result.get('next_event','UNKNOWN'))[:500] or 'UNKNOWN','horizon':str(result.get('horizon','UNKNOWN'))[:100] or 'UNKNOWN','forecast_basis':str(result.get('forecast_basis',''))[:900],'pattern':forecast,'hallucination_guard':'passed_evidence_gate_v3','evidence_quality':'corroborated_primary' if corroborated and primary else ('corroborated' if corroborated else 'single_source_or_nonindependent'),'evidence_domains':sorted(domains),'evidence_families':len(families)})
     return result
 
 def analyze(events):
@@ -136,7 +130,7 @@ def analyze(events):
         from .evidence import build_evidence_graph, compact_chain
         forecast['evidence_chain']=compact_chain(build_evidence_graph(events))
     except Exception as e:
-        forecast['evidence_chain']={'version':1,'metrics':{},'support_edges':[],'contradiction_edges':[],'fingerprint':'','error':type(e).__name__}
+        forecast['evidence_chain']={'version':2,'metrics':{},'support_edges':[],'contradiction_edges':[],'fingerprint':'','error':type(e).__name__}
     if not SETTINGS.openai_api_key:return _fallback(events,'OPENAI_API_KEY is not configured',forecast)
     compact=_compact_events(events)
     context={'scenario_id':SCENARIO_ID,'scenario_question':SCENARIO_QUESTION,'pattern':{k:v for k,v in forecast.items() if k!='_events'},'evidence_chain':forecast.get('evidence_chain',{}),'events':compact}
