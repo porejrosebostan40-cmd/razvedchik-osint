@@ -55,10 +55,8 @@ def _has_action(e):
 def _has_negative(e): return is_negative(e)
 def _has_root(e): return safe_root_event(e)
 def _content_origin(e):
-    """Conservative origin key for obvious cross-domain copies; primary sources remain domain-based."""
     if _is_primary(e.get('url','')): return 'primary:' + _source_family(e)
-    title=re.sub(r'\W+',' ',str(e.get('title','')).lower()).strip()
-    snippet=re.sub(r'\W+',' ',str(e.get('snippet','')).lower()).strip()
+    title=re.sub(r'\W+',' ',str(e.get('title','')).lower()).strip(); snippet=re.sub(r'\W+',' ',str(e.get('snippet','')).lower()).strip()
     if not title:return 'publisher:' + _source_family(e)
     return 'content:' + hashlib.sha256((title+'|'+snippet).encode()).hexdigest()[:20]
 def _compact_events(events,limit=10):
@@ -96,11 +94,9 @@ def _validate(result,events,forecast=None):
         if y:inf.append(y)
     used=list(dict.fromkeys(i for x in facts+inf for i in x['event_ids']))
     if not facts and not inf:return _fallback(events,'AI claims failed semantic evidence gate; rejected',forecast)
-    domains={_domain(allowed[i].get('url','')) for i in used if _domain(allowed[i].get('url',''))}
-    families={_source_family(allowed[i]) for i in used if _source_family(allowed[i])}
-    origins={_content_origin(allowed[i]) for i in used}
-    primary=any(_is_primary(allowed[i].get('url','')) for i in used)
-    corroborated=len(domains)>=2 and len(families)>=2 and len(origins)>=2
+    domains={_domain(allowed[i].get('url','')) for i in used if _domain(allowed[i].get('url',''))}; families={_source_family(allowed[i]) for i in used if _source_family(allowed[i])}; origins={_content_origin(allowed[i]) for i in used}; effective_families={f for f in families if f}
+    if len(origins)==1 and len(effective_families)>1: effective_families={'content_origin:' + next(iter(origins))}
+    primary=any(_is_primary(allowed[i].get('url','')) for i in used); corroborated=len(domains)>=2 and len(effective_families)>=2 and len(origins)>=2
     p,c,r=_score(result.get('probability')),_score(result.get('confidence')),_score(result.get('risk'))
     if not corroborated:p,c=min(p,60),min(c,50)
     elif not primary:p,c=min(p,85),min(c,70)
@@ -114,7 +110,7 @@ def _validate(result,events,forecast=None):
     if answer=='YES' and not any(_has_root(e) for e in linked_events):answer='UNKNOWN'
     if answer=='NO' and not any(_has_negative(e) for e in linked_events):answer='UNKNOWN'
     if c>p:c=p
-    result.update({'scenario_id':SCENARIO_ID,'scenario_question':SCENARIO_QUESTION,'scenario_answer':answer,'probability':p,'confidence':c,'risk':min(r,p),'facts':facts,'inferences':inf,'evidence_event_ids':used,'missing_indicators':result.get('missing_indicators',[]) if isinstance(result.get('missing_indicators',[]),list) else [],'next_event':str(result.get('next_event','UNKNOWN'))[:500] or 'UNKNOWN','horizon':str(result.get('horizon','UNKNOWN'))[:100] or 'UNKNOWN','forecast_basis':str(result.get('forecast_basis',''))[:900],'pattern':forecast,'hallucination_guard':'passed_evidence_gate_v2','evidence_quality':'corroborated_primary' if corroborated and primary else ('corroborated' if corroborated else 'single_source_or_nonindependent'),'evidence_domains':sorted(domains),'evidence_families':len(families),'evidence_origins':len(origins)}); return result
+    result.update({'scenario_id':SCENARIO_ID,'scenario_question':SCENARIO_QUESTION,'scenario_answer':answer,'probability':p,'confidence':c,'risk':min(r,p),'facts':facts,'inferences':inf,'evidence_event_ids':used,'missing_indicators':result.get('missing_indicators',[]) if isinstance(result.get('missing_indicators',[]),list) else [],'next_event':str(result.get('next_event','UNKNOWN'))[:500] or 'UNKNOWN','horizon':str(result.get('horizon','UNKNOWN'))[:100] or 'UNKNOWN','forecast_basis':str(result.get('forecast_basis',''))[:900],'pattern':forecast,'hallucination_guard':'passed_evidence_gate_v2','evidence_quality':'corroborated_primary' if corroborated and primary else ('corroborated' if corroborated else 'single_source_or_nonindependent'),'evidence_domains':sorted(domains),'evidence_families':len(effective_families),'evidence_origins':len(origins)}); return result
 def analyze(events):
     forecast=build_forecast(events)
     try:
