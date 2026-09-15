@@ -1,7 +1,7 @@
 import hashlib, json, re, requests
 from urllib.parse import urlsplit
 from .config import SETTINGS
-from .forecast import build_forecast, _source_family, TARGET_TERMS, ACTION_TERMS
+from .forecast import build_forecast, _source_family, _root_event, TARGET_TERMS, ACTION_TERMS
 
 SCENARIO_ID='prisoner_mobilization'
 SCENARIO_QUESTION='Будут ли мужчин из мест лишения свободы, прежде всего из исправительных колоний, мобилизовывать/привлекать к военной службе после 20 сентября 2026 года?'
@@ -65,10 +65,7 @@ def _has_action(e):
     text=_event_text(e); return any(t in text for t in ACTION_TERMS)
 def _has_negative(e):
     text=_event_text(e); return any(t in text for t in NEGATIVE_TERMS)
-def _has_root(e):
-    text=_event_text(e)
-    direct=('привлечен','привлечён','зачислен','зачислён','направлен','отправлен','отправл','призван','заключил контракт','заключен контракт','заключён контракт','начал службу')
-    return _has_target(e) and any(t in text for t in direct)
+def _has_root(e): return _root_event(e)
 
 def _compact_events(events,limit=10):
     unique={_eid(e):e for e in (events or [])}
