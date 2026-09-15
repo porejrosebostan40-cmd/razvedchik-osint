@@ -14,7 +14,7 @@
   "model_risk": 0,
   "confidence": 0,
   "analysis_provider": "fallback",
-  "reason": "OpenAI HTTP failure: 429 {\n  \"error\": {\n    \"message\": \"You have no credits remaining. Add credits to continue using the API at https://platform.openai.com/settings/organization/billing/.\",\n    \"type\": \"insufficient_quota\",\n    \"param\": null,\n    \"code\": \"credit_balance_exhausted\"\n  }\n}",
+  "reason": "OpenAI HTTP failure: 429 {\n  \"error\": {\n    \"message\": \"Rate limit reached for gpt-5.6-luna in organization org-MYHgoY7mWZFMbaJpA0Uo7t70 on tokens per min (TPM): Limit 100000, Used 98996, Requested 4656. Please try again in 26h17m39.839s. Visit https://platform.openai.com/account/rate-limits to learn more. You can increase ",
   "signals": [
     "pattern_stage=4",
     "structure_score=28"
