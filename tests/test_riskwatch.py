@@ -15,7 +15,7 @@ def test_accumulated_methodology_is_loaded_by_ai():
     from riskwatch.ai import SYSTEM, METHODOLOGY_TEXT
     from riskwatch.methodology import HEURISTICS, SOURCE_RULES, SEARCH_SEQUENCE, POSITIVE_INDICATORS, NEGATIVE_INDICATORS
     assert METHODOLOGY_TEXT in SYSTEM and len(SOURCE_RULES)>=5 and len(SEARCH_SEQUENCE)>=8 and len(POSITIVE_INDICATORS)>=6 and len(NEGATIVE_INDICATORS)>=4
-    assert "Do not equate discussion" in HEURISTICS and "root scenario" in SYSTEM.lower()
+    assert any("Do not equate discussion" in rule for rule in HEURISTICS) and "root scenario" in SYSTEM.lower()
 
 def test_methodology_has_target_specific_final_stage():
     from riskwatch.methodology import STAGES
@@ -29,7 +29,7 @@ def test_store_roundtrip():
 def test_root_scenario_is_prison_mobilization():
     from riskwatch.ai import SCENARIO_ID, SCENARIO_QUESTION, _fallback
     assert SCENARIO_ID=="prisoner_mobilization" and "исправительных колоний" in SCENARIO_QUESTION and "мобилизовывать" in SCENARIO_QUESTION
-    d=_fallback("" if False else [],"test"); assert d["scenario_id"]==SCENARIO_ID and d["scenario_answer"]=="UNKNOWN" and d["probability"]==0
+    d=_fallback([],"test"); assert d["scenario_id"]==SCENARIO_ID and d["scenario_answer"]=="UNKNOWN" and d["probability"]==0
 
 def test_ai_fallback_function():
     from riskwatch.ai import _fallback
@@ -69,20 +69,26 @@ def test_evidence_score_is_not_probability():
 
 def test_root_forecast_resolves_only_on_root_event():
     from riskwatch.forecast import build_forecast, forecast_record, resolve_forecasts
-    f=build_forecast([{"url":"https://government.ru/a","title":"изменен порядок"}]); r=forecast_record(f,73,now=1000,evidence_ids=["x"]); done=resolve_forecasts([r], [{"url":"https://example.org/x","title":"призван на военную службу"}], now=r["deadline_ts"]+1)[0]; assert done["resolved"] and done["outcome"]==0
+    f=build_forecast([{"url":"https://government.ru/a","title":"изменен порядок"}]); r=forecast_record(f,73,now=1000,evidence_ids=["x"]); unrelated={"url":"https://example.org/x","title":"призван на военную службу","published_ts":999}; done=resolve_forecasts([r],[unrelated],now=r["deadline_ts"]+1)[0]; assert done["resolved"] and done["outcome"]==0
+
+def test_root_forecast_ignores_root_event_before_forecast_creation():
+    from riskwatch.forecast import build_forecast, forecast_record, resolve_forecasts
+    f=build_forecast([{"url":"https://government.ru/a","title":"изменен порядок"}]); r=forecast_record(f,73,now=1000,evidence_ids=["x"]); prior={"url":"https://fsin.gov.ru/x","title":"заключенный привлечен к военной службе и направлен","published_ts":900}; done=resolve_forecasts([r],[prior],now=r["deadline_ts"]+1)[0]; assert done["outcome"]==0
 
 def test_walk_forward_calibration_needs_history_and_uses_prior_bins():
     from riskwatch.forecast import calibration_summary, calibrate_probability
     records=[{"resolved":True,"scenario_id":"prisoner_mobilization","probability":50,"outcome":i%2,"brier":0.25} for i in range(29)]
-    assert calibration_summary(records)["calibration_status"]=="early" if False else calibration_summary(records)["calibration_status"]=="insufficient_history"
-    records.append({"resolved":True,"scenario_id":"prisoner_mobilization","probability":50,"outcome":1,"brier":0.25})
-    c=calibrate_probability(50,records); assert c["status"]=="preliminary" and 0<c["probability"]<100 and c["bin_sample"]==30
+    assert calibration_summary(records)["calibration_status"]=="insufficient_history"
+    records.append({"resolved":True,"scenario_id":"prisoner_mobilization","probability":50,"outcome":1,"brier":0.25}); c=calibrate_probability(50,records); assert c["status"]=="preliminary" and 0<c["probability"]<100 and c["bin_sample"]==30
 
 def test_calibration_summary_is_not_measured_too_early():
     from riskwatch.forecast import calibration_summary
-    records=[{"resolved":True,"scenario_id":"prisoner_mobilization","probability":50,"outcome":i%2,"brier":0.25} for i in range(99)]
-    assert calibration_summary(records)["calibration_status"]=="preliminary"
-    records.append({"resolved":True,"scenario_id":"prisoner_mobilization","probability":50,"outcome":1,"brier":0.25}); assert calibration_summary(records)["calibration_status"]=="measured"
+    records=[{"resolved":True,"scenario_id":"prisoner_mobilization","probability":50,"outcome":i%2,"brier":0.25} for i in range(99)]; assert calibration_summary(records)["calibration_status"]=="preliminary"; records.append({"resolved":True,"scenario_id":"prisoner_mobilization","probability":50,"outcome":1,"brier":0.25}); assert calibration_summary(records)["calibration_status"]=="measured"
+
+def test_issued_probability_is_evaluated_separately():
+    from riskwatch.forecast import calibration_summary
+    records=[{"resolved":True,"scenario_id":"prisoner_mobilization","raw_probability":80,"issued_probability":50,"outcome":1,"brier":0.04,"issued_brier":0.25} for _ in range(30)]
+    s=calibration_summary(records); assert s["brier"]==0.04 and s["issued_brier"]==0.25 and s["calibration_status"]=="preliminary"
 
 def test_regional_rotation_changes_each_20_minute_slot():
     from riskwatch.runner import _queries
@@ -91,4 +97,4 @@ def test_regional_rotation_changes_each_20_minute_slot():
 def test_regional_rotation_repeats_after_full_cycle():
     from riskwatch.config import REGIONS, REGIONAL_TEMPLATES
     from riskwatch.runner import _queries
-    slots=(len(REGIONS)*len(REGIONAL_TEMPLATES)+29)//30; a=_queries(datetime(2026,9,15,12,0,tzinfo=timezone.utc)); b=_queries(datetime(2026,9,15,12,0,tzinfo=timezone.utc).replace(day=15)); assert len(a)==len(b) and slots>=10
+    a=_queries(datetime(2026,9,15,12,0,tzinfo=timezone.utc)); b=_queries(datetime(2026,9,15,12,0,tzinfo=timezone.utc).replace(day=15)); assert len(a)==len(b) and len(REGIONS)*len(REGIONAL_TEMPLATES)>=300
