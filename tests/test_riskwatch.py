@@ -11,11 +11,12 @@ def test_source_matrix_contains_independent_and_public_sources():
     names={name for name,_ in SOURCE_TEMPLATES}
     assert {"Reuters","ТАСС","РИА Новости","Интерфакс","РБК","Медиазона","Telegram public","VK public","YouTube public"}.issubset(names)
 
-def test_accumulated_methodology_is_loaded_by_methodology_module():
+def test_accumulated_methodology_is_deterministic_and_not_sent_in_full_to_ai():
     from riskwatch.methodology import HEURISTICS, SOURCE_RULES, SEARCH_SEQUENCE, POSITIVE_INDICATORS, NEGATIVE_INDICATORS, METHODOLOGY_TEXT
     from riskwatch.ai import SYSTEM
     assert len(METHODOLOGY_TEXT)>500 and len(SOURCE_RULES)>=5 and len(SEARCH_SEQUENCE)>=8 and len(POSITIVE_INDICATORS)>=6 and len(NEGATIVE_INDICATORS)>=4
     assert any("Do not equate discussion" in rule for rule in HEURISTICS) and "root scenario" in SYSTEM.lower()
+    assert len(SYSTEM) < len(METHODOLOGY_TEXT)
 
 def test_methodology_has_target_specific_final_stage():
     from riskwatch.methodology import STAGES
@@ -41,19 +42,19 @@ def test_ai_rejects_unlinked_claims():
 
 def test_ai_requires_domain_independence_not_kind_labels():
     from riskwatch.ai import _validate, _eid
-    events=[{"url":"https://example.org/a","title":"A","kind":"source-a"},{"url":"https://example.org/b","title":"B","kind":"source-b"}]; ids=[_eid(e) for e in events]; result={"probability":99,"confidence":99,"risk":99,"facts":[{"text":"fact","event_ids":ids}],"inferences":[],"scenario_answer":"YES"}; d=_validate(result,events); assert d["probability"]<=60
+    events=[{"url":"https://example.org/a","title":"заключенные направлены на военную службу","kind":"source-a"},{"url":"https://example.org/b","title":"заключенные направлены на военную службу","kind":"source-b"}]; ids=[_eid(e) for e in events]; result={"probability":99,"confidence":99,"risk":99,"facts":[{"text":"fact","event_ids":ids}],"inferences":[],"scenario_answer":"YES"}; d=_validate(result,events); assert d["probability"]<=60
 
 def test_ai_collapses_obvious_cross_domain_reposts():
     from riskwatch.ai import _validate, _eid
-    title="Государство изменило порядок исполнения решения"; events=[{"url":"https://example.org/a","title":title,"snippet":"новый порядок"},{"url":"https://example.net/b","title":title,"snippet":"новый порядок"}]; ids=[_eid(e) for e in events]; result={"probability":99,"confidence":99,"risk":99,"facts":[{"text":"fact","event_ids":ids}],"inferences":[],"scenario_answer":"YES"}; d=_validate(result,events); assert d["evidence_families"]==1 and d["probability"]<=60
+    title="заключенные направлены на военную службу"; events=[{"url":"https://example.com/a","title":title,"snippet":"отбор и военная служба"},{"url":"https://example.net/b","title":title,"snippet":"отбор и военная служба"}]; ids=[_eid(e) for e in events]; result={"probability":99,"confidence":99,"risk":99,"facts":[{"text":"fact","event_ids":ids}],"inferences":[],"scenario_answer":"YES"}; d=_validate(result,events); assert d["evidence_families"]==1 and d["probability"]<=60
 
 def test_ai_caps_non_primary_corroboration():
     from riskwatch.ai import _validate, _eid
-    events=[{"url":"https://example.org/a","title":"A","kind":"source-a"},{"url":"https://example.net/b","title":"B","kind":"source-b"}]; ids=[_eid(e) for e in events]; result={"probability":100,"confidence":100,"risk":100,"facts":[{"text":"fact","event_ids":ids}],"inferences":[],"scenario_answer":"YES"}; d=_validate(result,events); assert d["probability"]<=85
+    events=[{"url":"https://example.org/a","title":"заключенные направлены на военную службу","kind":"source-a"},{"url":"https://example.net/b","title":"заключенные направлены на военную службу","kind":"source-b"}]; ids=[_eid(e) for e in events]; result={"probability":100,"confidence":100,"risk":100,"facts":[{"text":"fact","event_ids":ids}],"inferences":[],"scenario_answer":"YES"}; d=_validate(result,events); assert d["probability"]<=85
 
 def test_ai_allows_high_but_not_absolute_primary_corroboration():
     from riskwatch.ai import _validate, _eid
-    events=[{"url":"https://fsin.gov.ru/a","title":"A","kind":"UFSIN"},{"url":"https://example.net/b","title":"B","kind":"independent"}]; ids=[_eid(e) for e in events]; result={"probability":100,"confidence":100,"risk":100,"facts":[{"text":"fact","event_ids":ids}],"inferences":[],"scenario_answer":"YES"}; d=_validate(result,events); assert d["probability"]<=95 and d["probability"]<100
+    events=[{"url":"https://fsin.gov.ru/a","title":"заключенные направлены на военную службу","kind":"UFSIN"},{"url":"https://example.net/b","title":"заключенные направлены на военную службу","kind":"independent"}]; ids=[_eid(e) for e in events]; result={"probability":100,"confidence":100,"risk":100,"facts":[{"text":"fact","event_ids":ids}],"inferences":[],"scenario_answer":"YES"}; d=_validate(result,events); assert d["probability"]<=95 and d["probability"]<100
 
 def test_ai_semantic_gate_requires_target_and_action():
     from riskwatch.ai import _validate, _eid
