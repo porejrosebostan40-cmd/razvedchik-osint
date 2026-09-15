@@ -11,10 +11,10 @@ def test_source_matrix_contains_independent_and_public_sources():
     names={name for name,_ in SOURCE_TEMPLATES}
     assert {"Reuters","ТАСС","РИА Новости","Интерфакс","РБК","Медиазона","Telegram public","VK public","YouTube public"}.issubset(names)
 
-def test_accumulated_methodology_is_loaded_by_ai():
-    from riskwatch.ai import SYSTEM, METHODOLOGY_TEXT
-    from riskwatch.methodology import HEURISTICS, SOURCE_RULES, SEARCH_SEQUENCE, POSITIVE_INDICATORS, NEGATIVE_INDICATORS
-    assert METHODOLOGY_TEXT in SYSTEM and len(SOURCE_RULES)>=5 and len(SEARCH_SEQUENCE)>=8 and len(POSITIVE_INDICATORS)>=6 and len(NEGATIVE_INDICATORS)>=4
+def test_accumulated_methodology_is_loaded_by_methodology_module():
+    from riskwatch.methodology import HEURISTICS, SOURCE_RULES, SEARCH_SEQUENCE, POSITIVE_INDICATORS, NEGATIVE_INDICATORS, METHODOLOGY_TEXT
+    from riskwatch.ai import SYSTEM
+    assert len(METHODOLOGY_TEXT)>500 and len(SOURCE_RULES)>=5 and len(SEARCH_SEQUENCE)>=8 and len(POSITIVE_INDICATORS)>=6 and len(NEGATIVE_INDICATORS)>=4
     assert any("Do not equate discussion" in rule for rule in HEURISTICS) and "root scenario" in SYSTEM.lower()
 
 def test_methodology_has_target_specific_final_stage():
@@ -55,9 +55,30 @@ def test_ai_allows_high_but_not_absolute_primary_corroboration():
     from riskwatch.ai import _validate, _eid
     events=[{"url":"https://fsin.gov.ru/a","title":"A","kind":"UFSIN"},{"url":"https://example.net/b","title":"B","kind":"independent"}]; ids=[_eid(e) for e in events]; result={"probability":100,"confidence":100,"risk":100,"facts":[{"text":"fact","event_ids":ids}],"inferences":[],"scenario_answer":"YES"}; d=_validate(result,events); assert d["probability"]<=95 and d["probability"]<100
 
+def test_ai_semantic_gate_requires_target_and_action():
+    from riskwatch.ai import _validate, _eid
+    events=[{"url":"https://fsin.gov.ru/a","title":"ФСИН сообщила о порядке работы","snippet":"новые правила"}]
+    eid=_eid(events[0]); result={"probability":90,"confidence":90,"risk":90,"facts":[{"text":"unsupported claim","event_ids":[eid]}],"inferences":[],"scenario_answer":"YES"}
+    d=_validate(result,events)
+    assert d["analysis_provider"]=="fallback" and d["probability"]==0 and d["scenario_answer"]=="UNKNOWN"
+
+def test_ai_semantic_gate_rejects_yes_without_root_signal():
+    from riskwatch.ai import _validate, _eid
+    events=[{"url":"https://fsin.gov.ru/a","title":"ФСИН подготовила списки заключенных","snippet":"отбор и учет"}]
+    eid=_eid(events[0]); result={"probability":70,"confidence":60,"risk":70,"facts":[{"text":"preparation signal","event_ids":[eid]}],"inferences":[],"scenario_answer":"YES"}
+    d=_validate(result,events)
+    assert d["hallucination_guard"]=="passed_evidence_gate_v2" and d["scenario_answer"]=="UNKNOWN"
+
+def test_ai_semantic_gate_rejects_no_without_negative_signal():
+    from riskwatch.ai import _validate, _eid
+    events=[{"url":"https://fsin.gov.ru/a","title":"ФСИН подготовила списки заключенных","snippet":"отбор и учет"}]
+    eid=_eid(events[0]); result={"probability":10,"confidence":60,"risk":10,"facts":[{"text":"preparation signal","event_ids":[eid]}],"inferences":[],"scenario_answer":"NO"}
+    d=_validate(result,events)
+    assert d["hallucination_guard"]=="passed_evidence_gate_v2" and d["scenario_answer"]=="UNKNOWN"
+
 def test_pattern_engine_recognizes_ordered_chain_and_next_step():
     from riskwatch.forecast import build_forecast
-    events=[{"url":"https://government.ru/a","title":"Правительство изменило порядок","snippet":"новые правила"},{"url":"https://fsin.gov.ru/b","title":"Поручено подготовить списки","snippet":"проверка и учет"},{"url":"https://example.net/c","title":"Подготовлены места и транспорт","snippet":"снабжение и размещение"}]; f=build_forecast(events); assert f["pattern_stage"]==3 and f["next_stage"]=="operational_implementation" and f["structure_score"]>30
+    events=[{"url":"https://government.ru/a","title":"Правительство изменило порядок","snippet":"новые правила"},{"url":"https://fsin.gov.ru/b","title":"Поручено подготовить списки заключенных","snippet":"проверка и учет"},{"url":"https://example.net/c","title":"Подготовлены места и транспорт","snippet":"снабжение и размещение"}]; f=build_forecast(events); assert f["pattern_stage"]==3 and f["next_stage"]=="operational_implementation" and f["structure_score"]>30
 
 def test_root_stage_requires_target_specificity():
     from riskwatch.forecast import build_forecast
