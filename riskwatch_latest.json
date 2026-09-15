@@ -1,14 +1,16 @@
 {
-  "probability": 60,
-  "confidence": 40,
-  "risk": 60,
-  "decision": "WATCH",
-  "reason": "OpenAI analysis failed: HTTPError status=429 body={\n  \"error\": {\n    \"message\": \"Rate limit reached for gpt-5.6-luna in organization org-MYHgoY7mWZFMbaJpA0Uo7t70 on tokens per min (TPM): Limit 100000, Used 96398, Requested 5296. Please try again in 12h11m48.48s. Visit https://platform.openai.com/account/rate-limits to learn more. You can increase y; deterministic fallback used",
-  "signals": [
-    "official_or_primary_results=0",
-    "regional_results=120"
-  ],
+  "scenario": "мобилизационные или связанные с ФСИН действия после 20 сентября 2026 года",
+  "probability": 0,
+  "confidence": 0,
+  "risk": 0,
+  "reason": "Переданные материалы не содержат подтвержденных сведений о мобилизационных или связанных с ФСИН действиях после 20 сентября 2026 года. Ссылки ведут на нерелевантные страницы либо поисковые перенаправления; официальное и независимое подтверждение отсутствует. Слухи также не зафиксированы.",
   "missing_indicators": [
-    "direct official decision confirming the scenario"
-  ]
+    "официальные документы или заявления органов власти и ФСИН",
+    "независимые подтверждения из надежных СМИ",
+    "конкретные сведения о месте, времени и характере возможных действий",
+    "данные о распоряжениях, перемещениях, изменении режима или мобилизационных мероприятиях в учреждениях ФСИН"
+  ],
+  "decision": "WATCH",
+  "signals": [],
+  "analysis_provider": "openai"
 }
