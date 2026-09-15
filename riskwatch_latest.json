@@ -31,7 +31,7 @@
     "interpretation": "ordered multi-stage chain is forming"
   },
   "analysis_provider": "cached",
-  "model_probability": 60,
+  "model_probability": 0,
   "calibration": {
     "resolved": 0,
     "brier": null,
