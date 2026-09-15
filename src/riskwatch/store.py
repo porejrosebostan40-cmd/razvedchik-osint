@@ -3,7 +3,7 @@ import hashlib, json, os, time
 MAX_EVENTS = 3000
 MAX_DECISIONS = 500
 MAX_FORECASTS = 1000
-AI_INTERVAL_SECONDS = 3600
+AI_INTERVAL_SECONDS = 0
 
 class Store:
     def __init__(self,path=None):
