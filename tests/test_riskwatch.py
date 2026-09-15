@@ -56,10 +56,7 @@ def test_ai_caps_single_source_probability():
 
 def test_ai_requires_domain_independence_not_kind_labels():
     from riskwatch.ai import _validate, _eid
-    events=[
-        {"url":"https://example.org/a","title":"A","kind":"source-a"},
-        {"url":"https://example.org/b","title":"B","kind":"source-b"},
-    ]
+    events=[{"url":"https://example.org/a","title":"A","kind":"source-a"},{"url":"https://example.org/b","title":"B","kind":"source-b"}]
     ids=[_eid(e) for e in events]
     result={"probability":99,"confidence":99,"risk":99,"facts":[{"text":"fact","event_ids":ids}],"inferences":[],"evidence_event_ids":ids,"missing_indicators":[]}
     d=_validate(result,events)
@@ -70,10 +67,7 @@ def test_ai_requires_domain_independence_not_kind_labels():
 def test_ai_collapses_obvious_cross_domain_reposts():
     from riskwatch.ai import _validate, _eid
     title="Государство изменило порядок исполнения решения"
-    events=[
-        {"url":"https://example.org/a","title":title,"snippet":"новый порядок"},
-        {"url":"https://example.net/b","title":title,"snippet":"новый порядок"},
-    ]
+    events=[{"url":"https://example.org/a","title":title,"snippet":"новый порядок"},{"url":"https://example.net/b","title":title,"snippet":"новый порядок"}]
     ids=[_eid(e) for e in events]
     result={"probability":99,"confidence":99,"risk":99,"facts":[{"text":"fact","event_ids":ids}],"inferences":[],"evidence_event_ids":ids,"missing_indicators":[]}
     d=_validate(result,events)
@@ -83,10 +77,7 @@ def test_ai_collapses_obvious_cross_domain_reposts():
 
 def test_ai_caps_non_primary_corroboration():
     from riskwatch.ai import _validate, _eid
-    events=[
-        {"url":"https://example.org/a","title":"A","kind":"source-a"},
-        {"url":"https://example.net/b","title":"B","kind":"source-b"},
-    ]
+    events=[{"url":"https://example.org/a","title":"A","kind":"source-a"},{"url":"https://example.net/b","title":"B","kind":"source-b"}]
     ids=[_eid(e) for e in events]
     result={"probability":100,"confidence":100,"risk":100,"facts":[{"text":"fact","event_ids":ids}],"inferences":[],"evidence_event_ids":ids,"missing_indicators":[]}
     d=_validate(result,events)
@@ -96,10 +87,7 @@ def test_ai_caps_non_primary_corroboration():
 
 def test_ai_allows_high_but_not_absolute_primary_corroboration():
     from riskwatch.ai import _validate, _eid
-    events=[
-        {"url":"https://fsin.gov.ru/a","title":"A","kind":"UFSIN"},
-        {"url":"https://example.net/b","title":"B","kind":"independent"},
-    ]
+    events=[{"url":"https://fsin.gov.ru/a","title":"A","kind":"UFSIN"},{"url":"https://example.net/b","title":"B","kind":"independent"}]
     ids=[_eid(e) for e in events]
     result={"probability":100,"confidence":100,"risk":100,"facts":[{"text":"fact","event_ids":ids}],"inferences":[],"evidence_event_ids":ids,"missing_indicators":[]}
     d=_validate(result,events)
@@ -110,11 +98,7 @@ def test_ai_allows_high_but_not_absolute_primary_corroboration():
 
 def test_pattern_engine_recognizes_ordered_chain_and_next_step():
     from riskwatch.forecast import build_forecast
-    events=[
-        {"url":"https://government.ru/a","title":"Правительство изменило порядок","snippet":"новые правила"},
-        {"url":"https://fsin.gov.ru/b","title":"Поручено подготовить списки","snippet":"проверка и учет"},
-        {"url":"https://example.net/c","title":"Подготовлены места и транспорт","snippet":"снабжение и размещение"},
-    ]
+    events=[{"url":"https://government.ru/a","title":"Правительство изменило порядок","snippet":"новые правила"},{"url":"https://fsin.gov.ru/b","title":"Поручено подготовить списки","snippet":"проверка и учет"},{"url":"https://example.net/c","title":"Подготовлены места и транспорт","snippet":"снабжение и размещение"}]
     f=build_forecast(events)
     assert f["pattern_stage"] == 3
     assert f["next_stage"] == "operational_implementation"
@@ -130,13 +114,34 @@ def test_pattern_engine_does_not_turn_one_event_into_high_structure():
 
 def test_probability_cannot_run_far_ahead_of_pattern_strength():
     from riskwatch.ai import _validate, _eid
-    events=[{"url":"https://example.org/a","title":"Правительство изменило порядок","kind":"policy"},
-            {"url":"https://example.net/b","title":"Приказ опубликован","kind":"order"}]
+    events=[{"url":"https://example.org/a","title":"Правительство изменило порядок","kind":"policy"},{"url":"https://example.net/b","title":"Приказ опубликован","kind":"order"}]
     ids=[_eid(e) for e in events]
     result={"probability":99,"confidence":99,"risk":99,"facts":[{"text":"facts","event_ids":ids}],"inferences":[{"text":"inference","event_ids":ids}],"evidence_event_ids":ids,"missing_indicators":[]}
     d=_validate(result,events)
     assert d["probability"] <= 70
     assert d["confidence"] <= d["probability"]
+
+
+def test_forecast_record_is_unresolved_until_deadline():
+    from riskwatch.forecast import build_forecast, forecast_record, resolve_forecasts
+    f=build_forecast([{"url":"https://government.ru/a","title":"изменен порядок"}])
+    r=forecast_record(f,73,now=1000)
+    assert r["resolved"] is False
+    assert resolve_forecasts([r],[],now=r["deadline_ts"]-1)[0]["resolved"] is False
+    done=resolve_forecasts([r],[],now=r["deadline_ts"]+1)[0]
+    assert done["resolved"] is True
+    assert done["outcome"] == 0
+    assert 0 <= done["brier"] <= 1
+
+
+def test_calibration_is_not_declared_measured_too_early():
+    from riskwatch.forecast import calibration_summary
+    records=[]
+    for i in range(19):
+        records.append({"resolved":True,"probability":50,"outcome":1 if i % 2 else 0,"brier":0.25})
+    assert calibration_summary(records)["calibration_status"] == "early"
+    records.append({"resolved":True,"probability":50,"outcome":1,"brier":0.25})
+    assert calibration_summary(records)["calibration_status"] == "measured"
 
 
 def test_regional_rotation_changes_each_20_minute_slot():
