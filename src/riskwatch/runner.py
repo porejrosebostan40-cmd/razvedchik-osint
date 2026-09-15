@@ -5,6 +5,7 @@ from .config import SETTINGS, REGIONS, SOURCE_TEMPLATES, REGIONAL_TEMPLATES, COR
 from .search import search
 from .store import Store
 from .ai import analyze
+from .forecast import build_forecast, forecast_record, resolve_forecasts, calibration_summary, render_context
 
 BATCH_SIZE = 30
 MAX_WORKERS = 8
@@ -45,7 +46,7 @@ def _collect_one(item):
         return []
 
 
-def _throttled_decision(store, events):
+def _throttled_decision(store):
     previous=store.last_decision()
     if previous:
         return {
@@ -62,7 +63,7 @@ def _throttled_decision(store, events):
             "pattern":previous.get("pattern",{}),
             "analysis_provider":"cached",
         }
-    return analyze(events)
+    return None
 
 
 def telegram(text):
@@ -87,12 +88,40 @@ def run():
         for future in as_completed(futures):
             events.extend(future.result())
     store.add_events(events)
+    all_events=store.recent(3000)
+
+    # Resolve forecasts only after their full horizon has elapsed.
+    resolved=resolve_forecasts(store.forecasts(),all_events)
+    if resolved != store.forecasts():
+        store.replace_forecasts(resolved)
+    calibration=calibration_summary(resolved)
+    pattern=build_forecast(all_events)
+
     if store.ai_due():
         store.mark_ai_attempt()
-        decision=analyze(store.recent(120))
+        decision=analyze(all_events)
     else:
-        decision=_throttled_decision(store,events)
+        decision=_throttled_decision(store)
+        if decision is None:
+            decision=analyze(all_events)
+
+    # The model is not allowed to turn structural evidence into a "pretty" probability.
+    # The probability is kept only when historical calibration exists; otherwise it is
+    # treated as uncalibrated and forced to zero for alerting purposes.
+    calibrated_probability=int(decision.get("probability",0)) if calibration.get("resolved",0) >= 20 else 0
+    decision["model_probability"]=int(decision.get("probability",0))
+    decision["probability"]=calibrated_probability
+    decision["pattern"]=pattern
+    decision["calibration"]=calibration
+    decision["next_event"]=pattern.get("next_stage","UNKNOWN")
+    decision["horizon"]=pattern.get("next_event_horizon","UNKNOWN")
+    decision["forecast_basis"]=render_context(pattern,calibration)
+
+    # Every nonzero model estimate becomes a forecast record, but it cannot influence
+    # alerting until empirical history proves the estimate is calibrated.
+    store.save_forecast(forecast_record(pattern,decision["model_probability"]))
     store.save_decision(decision)
+
     p=int(decision.get("probability",0))
     risk=int(decision.get("risk",0))
     c=int(decision.get("confidence",0))
