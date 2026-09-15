@@ -67,6 +67,20 @@ def test_ai_requires_domain_independence_not_kind_labels():
     assert d["confidence"] <= 50
 
 
+def test_ai_collapses_obvious_cross_domain_reposts():
+    from riskwatch.ai import _validate, _eid
+    title="Государство изменило порядок исполнения решения"
+    events=[
+        {"url":"https://example.org/a","title":title,"snippet":"новый порядок"},
+        {"url":"https://example.net/b","title":title,"snippet":"новый порядок"},
+    ]
+    ids=[_eid(e) for e in events]
+    result={"probability":99,"confidence":99,"risk":99,"facts":[{"text":"fact","event_ids":ids}],"inferences":[],"evidence_event_ids":ids,"missing_indicators":[]}
+    d=_validate(result,events)
+    assert d["evidence_families"] == 1
+    assert d["probability"] <= 60
+
+
 def test_ai_caps_non_primary_corroboration():
     from riskwatch.ai import _validate, _eid
     events=[
