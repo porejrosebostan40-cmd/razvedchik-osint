@@ -1,4 +1,5 @@
 import requests
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import datetime, timezone
 from .config import SETTINGS, REGIONS, SOURCE_TEMPLATES, REGIONAL_TEMPLATES, CORE_TERMS
 from .search import search
@@ -6,6 +7,7 @@ from .store import Store
 from .ai import analyze
 
 BATCH_SIZE = 30
+MAX_WORKERS = 8
 
 
 def _region(label):
@@ -31,6 +33,18 @@ def _queries(now=None):
     return core+[regional[(start+i)%len(regional)] for i in range(min(BATCH_SIZE,len(regional)))]
 
 
+def _collect_one(item):
+    label,q=item
+    try:
+        results=search(q)
+        for e in results:
+            e["region"]=_region(label)
+            e["kind"]=label
+        return results
+    except Exception:
+        return []
+
+
 def telegram(text):
     if not SETTINGS.telegram_token or not SETTINGS.telegram_chat_id:
         return
@@ -47,11 +61,11 @@ def telegram(text):
 def run():
     store=Store()
     events=[]
-    for label,q in _queries():
-        for e in search(q):
-            e["region"]=_region(label)
-            e["kind"]=label
-            events.append(e)
+    queries=_queries()
+    with ThreadPoolExecutor(max_workers=MAX_WORKERS) as pool:
+        futures=[pool.submit(_collect_one,item) for item in queries]
+        for future in as_completed(futures):
+            events.extend(future.result())
     store.add_events(events)
     decision=analyze(store.recent(120))
     store.save_decision(decision)
