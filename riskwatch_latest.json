@@ -3,12 +3,13 @@
   "confidence": 40,
   "risk": 60,
   "decision": "WATCH",
-  "reason": "OpenAI analysis failed: HTTPError status=429 body={\n  \"error\": {\n    \"message\": \"Rate limit reached for gpt-5.6-luna in organization org-MYHgoY7mWZFMbaJpA0Uo7t70 on tokens per min (TPM): Limit 100000, Used 99982, Requested 2220. Please try again in 15h51m15.84s. Visit https://platform.openai.com/account/rate-limits to learn more. You can increase y; deterministic fallback used",
+  "reason": "AI call throttled; previous decision reused",
   "signals": [
     "official_or_primary_results=0",
     "regional_results=120"
   ],
   "missing_indicators": [
     "direct official decision confirming the scenario"
-  ]
+  ],
+  "analysis_provider": "cached"
 }
