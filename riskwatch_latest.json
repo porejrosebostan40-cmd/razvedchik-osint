@@ -11,5 +11,9 @@
   "missing_indicators": [
     "direct official decision confirming the scenario"
   ],
+  "next_event": "UNKNOWN",
+  "horizon": "UNKNOWN",
+  "forecast_basis": "",
+  "pattern": {},
   "analysis_provider": "cached"
 }
