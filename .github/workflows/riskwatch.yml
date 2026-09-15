@@ -51,18 +51,25 @@ jobs:
             python - <<'PY'
           import json
           from pathlib import Path
+          def compact_event(e):
+              keep=('url','title','snippet','source','query','region','kind','ts','published_ts','published','date')
+              out={k:e[k] for k in keep if k in e}
+              if isinstance(out.get('snippet'),str): out['snippet']=out['snippet'][:700]
+              if isinstance(out.get('title'),str): out['title']=out['title'][:500]
+              return out
           remote=json.loads(Path('riskwatch_state.json').read_text(encoding='utf-8'))
           local=json.loads(Path('/tmp/riskwatch_state.local.json').read_text(encoding='utf-8'))
           events={**remote.get('events',{}), **local.get('events',{})}
-          events=dict(sorted(events.items(), key=lambda kv: kv[1].get('ts',0))[-3000:])
+          events=dict(sorted(events.items(), key=lambda kv: kv[1].get('ts',0))[-1200:])
+          events={k:compact_event(v) for k,v in events.items()}
           decisions=remote.get('decisions',[])+local.get('decisions',[])
-          decisions=sorted(decisions,key=lambda x:x.get('ts',0))[-500:]
+          decisions=sorted(decisions,key=lambda x:x.get('ts',0))[-250:]
           forecasts={}
           for item in remote.get('forecasts',[])+local.get('forecasts',[]):
               forecasts[item.get('forecast_id',str(len(forecasts)))]=item
-          forecasts=sorted(forecasts.values(),key=lambda x:x.get('created_ts',0))[-1000:]
+          forecasts=sorted(forecasts.values(),key=lambda x:x.get('created_ts',0))[-500:]
           merged={'events':events,'decisions':decisions,'forecasts':forecasts,'last_ai_ts':max(float(remote.get('last_ai_ts',0)),float(local.get('last_ai_ts',0)))}
-          Path('riskwatch_state.json').write_text(json.dumps(merged,ensure_ascii=False,indent=2),encoding='utf-8')
+          Path('riskwatch_state.json').write_text(json.dumps(merged,ensure_ascii=False,separators=(',',':')),encoding='utf-8')
           Path('riskwatch_latest.json').write_text(Path('/tmp/riskwatch_latest.local.json').read_text(encoding='utf-8'),encoding='utf-8')
           PY
             git add riskwatch_state.json riskwatch_latest.json
