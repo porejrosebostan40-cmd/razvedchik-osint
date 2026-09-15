@@ -1,0 +1,36 @@
+name: RiskWatch AI Smoke Test
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  smoke:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Install
+        run: pip install .
+      - name: Test exact RiskWatch OpenAI path
+        env:
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+          OPENAI_MODEL: gpt-5.6-luna
+        run: |
+          python - <<'PY'
+          from riskwatch.ai import analyze
+          result=analyze([{
+              "url":"https://example.org/test",
+              "title":"Test signal",
+              "snippet":"Test signal for RiskWatch AI integration",
+              "region":"",
+              "kind":"smoke",
+              "source":"smoke",
+          }])
+          print(result)
+          assert result.get("analysis_provider") == "openai", result
+          assert all(0 <= int(result[k]) <= 100 for k in ("probability","confidence","risk"))
+          PY
