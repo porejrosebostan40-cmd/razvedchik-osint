@@ -11,10 +11,11 @@
   "missing_indicators": [
     "direct official decision confirming the scenario"
   ],
-  "next_event": "operational_implementation",
+  "next_event": "root_scenario",
   "horizon": "24-72h",
-  "forecast_basis": "PATTERN_ENGINE\npattern_stage=4\npattern_stage_name=operational_implementation\nobserved_stages=['legal_or_policy_signal', 'administrative_preparation', 'operational_implementation']\nnext_stage=operational_implementation\nnext_event_horizon=24-72h\nindependent_domains=1\nregions_with_signals=7\nnegative_indicators=0\nacceleration=1.0\nstructure_score=44\ninterpretation=ordered multi-stage chain is forming\nCALIBRATION={'resolved': 0, 'brier': None, 'calibration_status': 'insufficient_history'}\nstructure_score is evidence structure, not probability; probability requires historical calibration.",
+  "forecast_basis": "PATTERN_ENGINE\nscenario_id=prisoner_mobilization\npattern_stage=4\npattern_stage_name=operational_implementation\nobserved_stages=['legal_or_policy_signal', 'administrative_preparation', 'operational_implementation']\nnext_stage=root_scenario\nnext_event_horizon=24-72h\nindependent_domains=1\nregions_with_signals=7\nnegative_indicators=0\nacceleration=1.0\nstructure_score=44\nevidence_score=30\nevidence_metrics={'score': 30, 'target_events': 20, 'action_events': 12, 'independent_domains': 1, 'primary_events': 0, 'negative_indicators': 0}\ninterpretation=ordered multi-stage chain is forming\nCALIBRATION={'resolved': 0, 'brier': None, 'brier_skill_score': None, 'calibration_status': 'insufficient_history'}\nstructure_score and evidence_score are evidence-strength measures, not probabilities; root probability requires temporal historical calibration.",
   "pattern": {
+    "scenario_id": "prisoner_mobilization",
     "pattern_stage": 4,
     "pattern_stage_name": "operational_implementation",
     "observed_stages": [
@@ -22,13 +23,22 @@
       "administrative_preparation",
       "operational_implementation"
     ],
-    "next_stage": "operational_implementation",
+    "next_stage": "root_scenario",
     "next_event_horizon": "24-72h",
     "independent_domains": 1,
     "regions_with_signals": 7,
     "negative_indicators": 0,
     "acceleration": 1.0,
     "structure_score": 44,
+    "evidence_score": 30,
+    "evidence_metrics": {
+      "score": 30,
+      "target_events": 20,
+      "action_events": 12,
+      "independent_domains": 1,
+      "primary_events": 0,
+      "negative_indicators": 0
+    },
     "interpretation": "ordered multi-stage chain is forming"
   },
   "scenario_answer": "UNKNOWN",
@@ -37,6 +47,7 @@
   "calibration": {
     "resolved": 0,
     "brier": null,
+    "brier_skill_score": null,
     "calibration_status": "insufficient_history"
   },
   "scenario_question": "Будут ли мужчин из мест лишения свободы, прежде всего из исправительных колоний, мобилизовывать/привлекать к военной службе после 20 сентября 2026 года?"
