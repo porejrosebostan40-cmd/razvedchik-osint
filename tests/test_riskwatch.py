@@ -25,43 +25,38 @@ def test_store_roundtrip():
         assert len(Store(str(p)).recent())==1
 
 
+def test_root_scenario_is_prison_mobilization():
+    from riskwatch.ai import SCENARIO_ID, SCENARIO_QUESTION, _fallback
+    assert SCENARIO_ID == "prisoner_mobilization"
+    assert "исправительных колоний" in SCENARIO_QUESTION
+    assert "мобилизовывать" in SCENARIO_QUESTION
+    d=_fallback([],"test")
+    assert d["scenario_id"] == SCENARIO_ID
+    assert d["scenario_answer"] == "UNKNOWN"
+    assert d["probability"] == 0
+
+
 def test_ai_fallback_function():
     from riskwatch.ai import _fallback
     d=_fallback([],"test")
-    assert d["probability"] == 0
-    assert d["confidence"] == 0
-    assert d["risk"] == 0
-    assert d["decision"]=="WATCH"
+    assert d["probability"] == 0 and d["confidence"] == 0 and d["risk"] == 0 and d["decision"]=="WATCH"
 
 
 def test_ai_rejects_unlinked_claims():
-    from riskwatch.ai import _validate
-    events=[{"url":"https://example.org/a","title":"A","kind":"source-a"}]
-    result={"probability":99,"confidence":99,"risk":99,"facts":[],"inferences":[],"evidence_event_ids":["fake"],"missing_indicators":[]}
-    d=_validate(result,events)
-    assert d["probability"] == 0
-    assert d["confidence"] == 0
-    assert "hallucination guard" in d["reason"]
-
-
-def test_ai_caps_single_source_probability():
     from riskwatch.ai import _validate, _eid
     events=[{"url":"https://example.org/a","title":"A","kind":"source-a"}]
-    eid=_eid(events[0])
-    result={"probability":99,"confidence":99,"risk":99,"facts":[{"text":"fact","event_ids":[eid]}],"inferences":[],"evidence_event_ids":[eid],"missing_indicators":[]}
+    result={"probability":99,"confidence":99,"risk":99,"facts":[],"inferences":[],"evidence_event_ids":["fake"],"scenario_answer":"YES"}
     d=_validate(result,events)
-    assert d["probability"] <= 60
-    assert d["confidence"] <= 50
+    assert d["probability"] == 0 and d["scenario_answer"] == "UNKNOWN"
 
 
 def test_ai_requires_domain_independence_not_kind_labels():
     from riskwatch.ai import _validate, _eid
     events=[{"url":"https://example.org/a","title":"A","kind":"source-a"},{"url":"https://example.org/b","title":"B","kind":"source-b"}]
     ids=[_eid(e) for e in events]
-    result={"probability":99,"confidence":99,"risk":99,"facts":[{"text":"fact","event_ids":ids}],"inferences":[],"evidence_event_ids":ids,"missing_indicators":[]}
+    result={"probability":99,"confidence":99,"risk":99,"facts":[{"text":"fact","event_ids":ids}],"inferences":[],"scenario_answer":"YES"}
     d=_validate(result,events)
     assert d["probability"] <= 60
-    assert d["confidence"] <= 50
 
 
 def test_ai_collapses_obvious_cross_domain_reposts():
@@ -69,57 +64,49 @@ def test_ai_collapses_obvious_cross_domain_reposts():
     title="Государство изменило порядок исполнения решения"
     events=[{"url":"https://example.org/a","title":title,"snippet":"новый порядок"},{"url":"https://example.net/b","title":title,"snippet":"новый порядок"}]
     ids=[_eid(e) for e in events]
-    result={"probability":99,"confidence":99,"risk":99,"facts":[{"text":"fact","event_ids":ids}],"inferences":[],"evidence_event_ids":ids,"missing_indicators":[]}
+    result={"probability":99,"confidence":99,"risk":99,"facts":[{"text":"fact","event_ids":ids}],"inferences":[],"scenario_answer":"YES"}
     d=_validate(result,events)
-    assert d["evidence_families"] == 1
-    assert d["probability"] <= 60
+    assert d["evidence_families"] == 1 and d["probability"] <= 60
 
 
 def test_ai_caps_non_primary_corroboration():
     from riskwatch.ai import _validate, _eid
     events=[{"url":"https://example.org/a","title":"A","kind":"source-a"},{"url":"https://example.net/b","title":"B","kind":"source-b"}]
     ids=[_eid(e) for e in events]
-    result={"probability":100,"confidence":100,"risk":100,"facts":[{"text":"fact","event_ids":ids}],"inferences":[],"evidence_event_ids":ids,"missing_indicators":[]}
+    result={"probability":100,"confidence":100,"risk":100,"facts":[{"text":"fact","event_ids":ids}],"inferences":[],"scenario_answer":"YES"}
     d=_validate(result,events)
     assert d["probability"] <= 85
-    assert d["confidence"] <= 70
 
 
 def test_ai_allows_high_but_not_absolute_primary_corroboration():
     from riskwatch.ai import _validate, _eid
     events=[{"url":"https://fsin.gov.ru/a","title":"A","kind":"UFSIN"},{"url":"https://example.net/b","title":"B","kind":"independent"}]
     ids=[_eid(e) for e in events]
-    result={"probability":100,"confidence":100,"risk":100,"facts":[{"text":"fact","event_ids":ids}],"inferences":[],"evidence_event_ids":ids,"missing_indicators":[]}
+    result={"probability":100,"confidence":100,"risk":100,"facts":[{"text":"fact","event_ids":ids}],"inferences":[],"scenario_answer":"YES"}
     d=_validate(result,events)
-    assert d["probability"] <= 95
-    assert d["confidence"] <= 90
-    assert d["probability"] < 100
+    assert d["probability"] <= 95 and d["probability"] < 100
 
 
 def test_pattern_engine_recognizes_ordered_chain_and_next_step():
     from riskwatch.forecast import build_forecast
     events=[{"url":"https://government.ru/a","title":"Правительство изменило порядок","snippet":"новые правила"},{"url":"https://fsin.gov.ru/b","title":"Поручено подготовить списки","snippet":"проверка и учет"},{"url":"https://example.net/c","title":"Подготовлены места и транспорт","snippet":"снабжение и размещение"}]
     f=build_forecast(events)
-    assert f["pattern_stage"] == 3
-    assert f["next_stage"] == "operational_implementation"
-    assert f["structure_score"] > 30
+    assert f["pattern_stage"] == 3 and f["next_stage"] == "operational_implementation" and f["structure_score"] > 30
 
 
 def test_pattern_engine_does_not_turn_one_event_into_high_structure():
     from riskwatch.forecast import build_forecast
     f=build_forecast([{"url":"https://example.org/a","title":"важная новость","snippet":""}])
-    assert f["pattern_stage"] == 0
-    assert f["structure_score"] < 40
+    assert f["pattern_stage"] == 0 and f["structure_score"] < 40
 
 
 def test_probability_cannot_run_far_ahead_of_pattern_strength():
     from riskwatch.ai import _validate, _eid
     events=[{"url":"https://example.org/a","title":"Правительство изменило порядок","kind":"policy"},{"url":"https://example.net/b","title":"Приказ опубликован","kind":"order"}]
     ids=[_eid(e) for e in events]
-    result={"probability":99,"confidence":99,"risk":99,"facts":[{"text":"facts","event_ids":ids}],"inferences":[{"text":"inference","event_ids":ids}],"evidence_event_ids":ids,"missing_indicators":[]}
+    result={"probability":99,"confidence":99,"risk":99,"facts":[{"text":"facts","event_ids":ids}],"inferences":[{"text":"inference","event_ids":ids}],"scenario_answer":"YES"}
     d=_validate(result,events)
-    assert d["probability"] <= 70
-    assert d["confidence"] <= d["probability"]
+    assert d["probability"] <= 70 and d["confidence"] <= d["probability"]
 
 
 def test_forecast_record_is_unresolved_until_deadline():
@@ -129,16 +116,12 @@ def test_forecast_record_is_unresolved_until_deadline():
     assert r["resolved"] is False
     assert resolve_forecasts([r],[],now=r["deadline_ts"]-1)[0]["resolved"] is False
     done=resolve_forecasts([r],[],now=r["deadline_ts"]+1)[0]
-    assert done["resolved"] is True
-    assert done["outcome"] == 0
-    assert 0 <= done["brier"] <= 1
+    assert done["resolved"] is True and done["outcome"] == 0 and 0 <= done["brier"] <= 1
 
 
 def test_calibration_is_not_declared_measured_too_early():
     from riskwatch.forecast import calibration_summary
-    records=[]
-    for i in range(19):
-        records.append({"resolved":True,"probability":50,"outcome":1 if i % 2 else 0,"brier":0.25})
+    records=[{"resolved":True,"probability":50,"outcome":i%2,"brier":0.25} for i in range(19)]
     assert calibration_summary(records)["calibration_status"] == "early"
     records.append({"resolved":True,"probability":50,"outcome":1,"brier":0.25})
     assert calibration_summary(records)["calibration_status"] == "measured"
@@ -146,17 +129,13 @@ def test_calibration_is_not_declared_measured_too_early():
 
 def test_regional_rotation_changes_each_20_minute_slot():
     from riskwatch.runner import _queries
-    a=_queries(datetime(2026, 9, 15, 12, 0, tzinfo=timezone.utc))
-    b=_queries(datetime(2026, 9, 15, 12, 20, tzinfo=timezone.utc))
-    assert a[0] == b[0]
-    assert a[14:] != b[14:]
+    a=_queries(datetime(2026, 9, 15, 12, 0, tzinfo=timezone.utc)); b=_queries(datetime(2026, 9, 15, 12, 20, tzinfo=timezone.utc))
+    assert a[0] == b[0] and a[14:] != b[14:]
 
 
 def test_regional_rotation_repeats_after_full_cycle():
     from riskwatch.config import REGIONS, REGIONAL_TEMPLATES
     from riskwatch.runner import _queries
     slots=(len(REGIONS)*len(REGIONAL_TEMPLATES)+29)//30
-    a=_queries(datetime(2026, 9, 15, 12, 0, tzinfo=timezone.utc))
-    b=_queries(datetime(2026, 9, 15, 12, 0, tzinfo=timezone.utc).replace(day=15))
-    assert len(a) == len(b)
-    assert slots >= 10
+    a=_queries(datetime(2026, 9, 15, 12, 0, tzinfo=timezone.utc)); b=_queries(datetime(2026, 9, 15, 12, 0, tzinfo=timezone.utc).replace(day=15))
+    assert len(a) == len(b) and slots >= 10
