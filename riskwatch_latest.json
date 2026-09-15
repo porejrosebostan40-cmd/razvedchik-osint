@@ -1,5 +1,5 @@
 {
-  "probability": 0,
+  "probability": 0.0,
   "confidence": 40,
   "risk": 60,
   "decision": "WATCH",
@@ -13,7 +13,7 @@
   ],
   "next_event": "root_scenario",
   "horizon": "24-72h",
-  "forecast_basis": "PATTERN_ENGINE\nscenario_id=prisoner_mobilization\npattern_stage=4\npattern_stage_name=operational_implementation\nobserved_stages=['legal_or_policy_signal', 'administrative_preparation', 'operational_implementation']\nnext_stage=root_scenario\nnext_event_horizon=24-72h\nindependent_domains=1\nregions_with_signals=7\nnegative_indicators=0\nacceleration=1.0\nstructure_score=44\nevidence_score=30\nevidence_metrics={'score': 30, 'target_events': 20, 'action_events': 12, 'independent_domains': 1, 'primary_events': 0, 'negative_indicators': 0}\ninterpretation=ordered multi-stage chain is forming\nCALIBRATION={'resolved': 0, 'brier': None, 'brier_skill_score': None, 'calibration_status': 'insufficient_history'}\nstructure_score and evidence_score are evidence-strength measures, not probabilities; root probability requires temporal historical calibration.",
+  "forecast_basis": "PATTERN_ENGINE\nscenario_id=prisoner_mobilization\npattern_stage=4\npattern_stage_name=operational_implementation\nobserved_stages=['legal_or_policy_signal', 'administrative_preparation', 'operational_implementation']\nnext_stage=root_scenario\nnext_event_horizon=24-72h\nindependent_domains=1\nregions_with_signals=7\nnegative_indicators=0\nacceleration=1.0\nstructure_score=44\nevidence_score=30\nevidence_metrics={'score': 30, 'target_events': 40, 'action_events': 24, 'independent_domains': 1, 'primary_events': 0, 'negative_indicators': 0}\ninterpretation=ordered multi-stage chain is forming\nCALIBRATION={'resolved': 0, 'brier': None, 'brier_skill_score': None, 'calibration_status': 'insufficient_history'}\nstructure_score and evidence_score are evidence-strength measures, not probabilities; root probability requires temporal historical calibration.",
   "pattern": {
     "scenario_id": "prisoner_mobilization",
     "pattern_stage": 4,
@@ -33,8 +33,8 @@
     "evidence_score": 30,
     "evidence_metrics": {
       "score": 30,
-      "target_events": 20,
-      "action_events": 12,
+      "target_events": 40,
+      "action_events": 24,
       "independent_domains": 1,
       "primary_events": 0,
       "negative_indicators": 0
@@ -44,6 +44,12 @@
   "scenario_answer": "UNKNOWN",
   "analysis_provider": "cached",
   "model_probability": 0,
+  "probability_calibration": {
+    "probability": 0,
+    "status": "insufficient_history",
+    "sample": 0,
+    "raw": 0
+  },
   "calibration": {
     "resolved": 0,
     "brier": null,
