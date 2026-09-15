@@ -9,6 +9,7 @@ SYSTEM='''Ты аналитическое ядро системы раннего
 Разделяй FACT (прямо подтверждено источником), INFERENCE (логический вывод из нескольких FACT) и UNKNOWN.
 Для каждого FACT/INFERENCE обязательно укажи event_ids. Нельзя считать число публикаций доказательством само по себе.
 Публикации одного домена, явные перепечатки и сообщения, ссылающиеся на один первоисточник, не являются независимым подтверждением.
+Если два материала имеют почти одинаковый заголовок/текст, считай их одной evidence family, даже если домены разные.
 Если данных недостаточно для следующего шага — прямо укажи UNKNOWN и missing_indicators.
 Прогноз должен содержать next_event, horizon и почему именно этот следующий шаг следует из последовательности, а не просто повторять найденные новости.
 Вероятность должна отражать вероятность сценария в указанном горизонте, а не уверенность в существовании отдельной новости.
@@ -30,6 +31,13 @@ def _domain(url):
 def _is_primary(url):
     domain=_domain(url)
     return any(domain==d or domain.endswith('.'+d) for d in PRIMARY_DOMAINS)
+
+
+def _family(e):
+    text=(str(e.get('title',''))+' '+str(e.get('snippet',''))).lower()
+    text=re.sub(r'[^\w\sа-яё]',' ',text,flags=re.I)
+    words=[w for w in text.split() if len(w)>2]
+    return ' '.join(words[:18])
 
 
 def _fallback(events, reason, forecast=None):
@@ -110,8 +118,9 @@ def _validate(result, events, forecast=None):
         return _fallback(events,'AI returned no evidence-linked facts or inferences; model result rejected by hallucination guard',forecast)
 
     domains={_domain(allowed[x].get('url','')) for x in used if x in allowed and _domain(allowed[x].get('url',''))}
+    families={_family(allowed[x]) for x in used if x in allowed and _family(allowed[x])}
     primary_domains={_domain(allowed[x].get('url','')) for x in used if x in allowed and _is_primary(allowed[x].get('url',''))}
-    corroborated=len(domains)>=2
+    corroborated=len(domains)>=2 and len(families)>=2
     primary=bool(primary_domains)
 
     p=_score(result.get('probability',0)); c=_score(result.get('confidence',0)); r=_score(result.get('risk',0))
@@ -121,7 +130,6 @@ def _validate(result, events, forecast=None):
     structure=forecast.get('structure_score',0)
     if forecast.get('pattern_stage',0) < 2 and structure < 40:
         p=min(p,60); c=min(c,50)
-    # Prevent a language-model leap from outrunning the observed causal chain.
     if structure < 70:
         p=min(p, max(55, structure + 15))
     if c>p: c=p
@@ -136,6 +144,7 @@ def _validate(result, events, forecast=None):
     result['hallucination_guard']='passed_evidence_gate'
     result['evidence_quality']='corroborated_primary' if corroborated and primary else ('corroborated' if corroborated else 'single_source_or_nonindependent')
     result['evidence_domains']=sorted(domains)
+    result['evidence_families']=len(families)
     return result
 
 
