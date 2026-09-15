@@ -15,18 +15,21 @@ def _fallback(events, reason):
 
 def _extract_json(text):
     if not isinstance(text,str):
-        raise ValueError("empty or non-text model output")
+        raise ValueError(f"empty or non-text model output: {text!r}")
     cleaned=text.strip()
     if cleaned.startswith("```"):
         cleaned=re.sub(r"^```(?:json)?\s*|\s*```$","",cleaned,flags=re.I|re.S).strip()
     try:
         return json.loads(cleaned)
-    except json.JSONDecodeError:
+    except json.JSONDecodeError as first_error:
         start=cleaned.find("{")
         end=cleaned.rfind("}")
         if start < 0 or end <= start:
-            raise ValueError("model output does not contain JSON")
-        return json.loads(cleaned[start:end+1])
+            raise ValueError(f"model output does not contain JSON: {cleaned[:300]!r}") from first_error
+        try:
+            return json.loads(cleaned[start:end+1])
+        except json.JSONDecodeError as second_error:
+            raise ValueError(f"invalid model JSON: {cleaned[:300]!r}") from second_error
 
 
 def _response_text(data):
@@ -97,4 +100,5 @@ def analyze(events):
         status=getattr(exc.response,"status_code",None)
         return _fallback(events,f"OpenAI analysis failed: HTTPError status={status}; deterministic fallback used")
     except (requests.RequestException, ValueError, TypeError, KeyError) as exc:
-        return _fallback(events,f"OpenAI analysis failed: {type(exc).__name__}; deterministic fallback used")
+        detail=str(exc).replace("\n"," ")[:300]
+        return _fallback(events,f"OpenAI analysis failed: {type(exc).__name__}: {detail}; deterministic fallback used")
