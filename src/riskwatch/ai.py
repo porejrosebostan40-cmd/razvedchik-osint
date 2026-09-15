@@ -1,21 +1,19 @@
 import hashlib, json, re, requests
 from urllib.parse import urlsplit
 from .config import SETTINGS
-from .forecast import build_forecast
-from .methodology import METHODOLOGY_TEXT
+from .forecast import build_forecast, _source_family, TARGET_TERMS, ACTION_TERMS
 
 SCENARIO_ID='prisoner_mobilization'
 SCENARIO_QUESTION='Будут ли мужчин из мест лишения свободы, прежде всего из исправительных колоний, мобилизовывать/привлекать к военной службе после 20 сентября 2026 года?'
-SYSTEM='''Ты аналитическое ядро системы раннего предупреждения. Главный и неизменный объект прогнозирования — SCENARIO: будут ли мужчин из мест лишения свободы, прежде всего из исправительных колоний, мобилизовывать/привлекать к военной службе после 20 сентября 2026 года.
-Главный вопрос всегда один: БУДУТ ИЛИ НЕ БУДУТ. Не подменяй его вопросом о публикациях или обсуждении темы.
-Восстанови причинно-следственную цепочку: что произошло, какие стадии сформировались, какой следующий шаг ожидаем, ведёт ли последовательность к сценарию или от него.
-Разделяй FACT, INFERENCE и UNKNOWN. Каждый FACT/INFERENCE обязан ссылаться только на существующие event_ids. Перепечатки и синдикацию объединяй в одну evidence family.
-Анализируй обе стороны гипотезы и отсутствие ожидаемого шага только если он должен быть наблюдаем в горизонте.
-Различай вероятность основного сценария и вероятность следующего шага.
-Deterministic evidence graph — ограничитель. Не создавай связи и факты, которых нет в переданном графе. Если доказательств недостаточно — UNKNOWN.
-Используй методику ниже как обязательный протокол. Верни только JSON с полями probability, confidence, risk, decision, reason, facts, inferences, evidence_event_ids, missing_indicators, next_event, horizon, forecast_basis, scenario_answer.
-''' + METHODOLOGY_TEXT
+
+# The long methodology remains deterministic in methodology.py/forecast.py.
+# Only the minimum analytical protocol is sent to the model to keep TPM bounded.
+SYSTEM='''Ты аналитическое ядро RiskWatch. Не являйся источником фактов: работай только с переданными events и deterministic evidence_chain.
+Главный вопрос неизменен: будут ли мужчин из мест лишения свободы, прежде всего из исправительных колоний, мобилизовывать/привлекать к военной службе после 20 сентября 2026 года?
+Правила: 1) FACT и INFERENCE должны ссылаться только на event_id из входа. 2) Не считай поисковик источником. 3) Не считай перепечатки независимым подтверждением. 4) Не создавай отсутствующие события, связи или документы. 5) Разделяй основной сценарий и следующий наблюдаемый этап. 6) Если доказательств недостаточно — scenario_answer=UNKNOWN. 7) Для YES нужен target-specific root signal либо согласованная цепочка, ведущая к root. 8) Для NO нужна явная отрицательная evidence; отсутствие новости само по себе не является доказательством NO. 9) Верни только JSON.
+'''
 PRIMARY_DOMAINS=('kremlin.ru','government.ru','mil.ru','fsin.gov.ru','minjust.gov.ru','duma.gov.ru','council.gov.ru','publication.pravo.gov.ru','zakupki.gov.ru','gov.ru','epp.genproc.gov.ru')
+NEGATIVE_TERMS=('опроверг','не подтверд','отменен','отменён','отказ','не планируется','ложн','фейк','исключен','исключён')
 
 def _eid(e): return hashlib.sha256((str(e.get('url',''))+'|'+str(e.get('title',''))).encode()).hexdigest()[:16]
 def _domain(url):
@@ -23,9 +21,6 @@ def _domain(url):
     except ValueError:return ''
 def _is_primary(url):
     d=_domain(url); return any(d==x or d.endswith('.'+x) for x in PRIMARY_DOMAINS)
-def _family(e):
-    text=(str(e.get('title',''))+' '+str(e.get('snippet',''))).lower(); text=re.sub(r'[^\w\sа-яё]',' ',text,flags=re.I)
-    return ' '.join(w for w in text.split() if len(w)>2)[:300]
 
 def _fallback(events,reason,forecast=None):
     forecast=forecast or build_forecast(events)
@@ -36,7 +31,7 @@ def _extract_json(text):
     text=text.strip(); text=re.sub(r'^```(?:json)?\s*|\s*```$','',text,flags=re.I|re.S).strip()
     try:return json.loads(text)
     except json.JSONDecodeError:
-        a,b=text.find('{'),text.rfind('}');
+        a,b=text.find('{'),text.rfind('}')
         if a<0 or b<=a:raise ValueError('model output has no JSON object')
         return json.loads(text[a:b+1])
 
@@ -56,13 +51,13 @@ def _score(v):
         if m:return max(0,min(100,int(float(m.group(0).replace(',','.')))))
     return 0
 
-def _compact_events(events,limit=12):
+def _compact_events(events,limit=10):
     out=[]; seen=set()
-    ordered=sorted(events or [],key=lambda e:_timestamp(e) or 0,reverse=True)
-    for e in ordered:
+    for e in sorted(events or [],key=lambda e:_timestamp(e) or 0,reverse=True):
         eid=_eid(e)
         if eid in seen:continue
-        out.append({'event_id':eid,'url':str(e.get('url',''))[:240],'title':str(e.get('title',''))[:140],'snippet':str(e.get('snippet',''))[:220],'region':str(e.get('region',''))[:50],'kind':str(e.get('kind',''))[:40]}); seen.add(eid)
+        out.append({'event_id':eid,'url':str(e.get('url',''))[:220],'title':str(e.get('title',''))[:120],'snippet':str(e.get('snippet',''))[:180],'region':str(e.get('region',''))[:40],'kind':str(e.get('kind',''))[:30]})
+        seen.add(eid)
         if len(out)>=limit:break
     return out
 
@@ -71,18 +66,44 @@ def _timestamp(e):
     try:return float(v)
     except (TypeError,ValueError):return 0
 
+def _event_text(e):
+    return (str(e.get('title',''))+' '+str(e.get('snippet',''))).lower()
+
+def _has_target(e):
+    text=_event_text(e); return any(t in text for t in TARGET_TERMS)
+def _has_action(e):
+    text=_event_text(e); return any(t in text for t in ACTION_TERMS)
+def _has_negative(e):
+    text=_event_text(e); return any(t in text for t in NEGATIVE_TERMS)
+def _has_root(e):
+    text=_event_text(e)
+    direct=('привлечен','привлечён','зачислен','зачислён','направлен','отправлен','отправл','призван','заключил контракт','заключен контракт','заключён контракт','начал службу')
+    return _has_target(e) and any(t in text for t in direct)
+
+def _validate_claim(claim,allowed):
+    if not isinstance(claim,dict) or not isinstance(claim.get('text'),str) or not isinstance(claim.get('event_ids'),list):return None
+    ids=[i for i in claim['event_ids'] if isinstance(i,str) and i in allowed]
+    if not ids:return None
+    linked=[allowed[i] for i in ids]
+    # Second gate: a claim must be semantically anchored to target + action evidence.
+    if not any(_has_target(e) for e in linked):return None
+    if not any(_has_action(e) for e in linked):return None
+    return {'text':claim['text'].strip()[:600],'event_ids':ids}
+
 def _validate(result,events,forecast=None):
     forecast=forecast or build_forecast(events); allowed={_eid(e):e for e in events}
-    def clean(items):
-        out=[]
-        for x in items if isinstance(items,list) else []:
-            if not isinstance(x,dict) or not isinstance(x.get('text'),str) or not isinstance(x.get('event_ids'),list):continue
-            ids=[i for i in x['event_ids'] if isinstance(i,str) and i in allowed]
-            if ids:out.append({'text':x['text'].strip()[:600],'event_ids':ids})
-        return out
-    facts=clean(result.get('facts')); inf=clean(result.get('inferences')); used=list(dict.fromkeys(i for x in facts+inf for i in x['event_ids']))
-    if not facts and not inf:return _fallback(events,'AI returned no evidence-linked facts/inferences; rejected',forecast)
-    domains={_domain(allowed[i].get('url','')) for i in used if _domain(allowed[i].get('url',''))}; families={_family(allowed[i]) for i in used if _family(allowed[i])}; primary=any(_is_primary(allowed[i].get('url','')) for i in used)
+    facts=[]; inf=[]
+    for x in result.get('facts',[]) if isinstance(result.get('facts'),list) else []:
+        y=_validate_claim(x,allowed)
+        if y:facts.append(y)
+    for x in result.get('inferences',[]) if isinstance(result.get('inferences'),list) else []:
+        y=_validate_claim(x,allowed)
+        if y:inf.append(y)
+    used=list(dict.fromkeys(i for x in facts+inf for i in x['event_ids']))
+    if not facts and not inf:return _fallback(events,'AI claims failed semantic evidence gate; rejected',forecast)
+    domains={_domain(allowed[i].get('url','')) for i in used if _domain(allowed[i].get('url',''))}
+    families={_source_family(allowed[i]) for i in used if _source_family(allowed[i])}
+    primary=any(_is_primary(allowed[i].get('url','')) for i in used)
     corroborated=len(domains)>=2 and len(families)>=2
     p,c,r=_score(result.get('probability')),_score(result.get('confidence')),_score(result.get('risk'))
     if not corroborated:p,c=min(p,60),min(c,50)
@@ -91,10 +112,13 @@ def _validate(result,events,forecast=None):
     structure=int(forecast.get('structure_score',0)); stage=int(forecast.get('pattern_stage',0))
     if stage<2 and structure<40:p,c=min(p,60),min(c,50)
     if structure<70:p=min(p,max(55,structure+15))
-    if c>p:c=p
     answer=str(result.get('scenario_answer','UNKNOWN')).upper()
     if answer not in ('YES','NO','UNKNOWN'):answer='UNKNOWN'
-    result.update({'scenario_id':SCENARIO_ID,'scenario_question':SCENARIO_QUESTION,'scenario_answer':answer,'probability':p,'confidence':c,'risk':min(r,p),'facts':facts,'inferences':inf,'evidence_event_ids':used,'missing_indicators':result.get('missing_indicators',[]) if isinstance(result.get('missing_indicators',[]),list) else [],'next_event':str(result.get('next_event','UNKNOWN'))[:500] or 'UNKNOWN','horizon':str(result.get('horizon','UNKNOWN'))[:100] or 'UNKNOWN','forecast_basis':str(result.get('forecast_basis',''))[:900],'pattern':forecast,'hallucination_guard':'passed_evidence_gate','evidence_quality':'corroborated_primary' if corroborated and primary else ('corroborated' if corroborated else 'single_source_or_nonindependent'),'evidence_domains':sorted(domains),'evidence_families':len(families)})
+    linked_events=[allowed[i] for i in used]
+    if answer=='YES' and not any(_has_root(e) for e in linked_events):answer='UNKNOWN'
+    if answer=='NO' and not any(_has_negative(e) for e in linked_events):answer='UNKNOWN'
+    if c>p:c=p
+    result.update({'scenario_id':SCENARIO_ID,'scenario_question':SCENARIO_QUESTION,'scenario_answer':answer,'probability':p,'confidence':c,'risk':min(r,p),'facts':facts,'inferences':inf,'evidence_event_ids':used,'missing_indicators':result.get('missing_indicators',[]) if isinstance(result.get('missing_indicators',[]),list) else [],'next_event':str(result.get('next_event','UNKNOWN'))[:500] or 'UNKNOWN','horizon':str(result.get('horizon','UNKNOWN'))[:100] or 'UNKNOWN','forecast_basis':str(result.get('forecast_basis',''))[:900],'pattern':forecast,'hallucination_guard':'passed_evidence_gate_v2','evidence_quality':'corroborated_primary' if corroborated and primary else ('corroborated' if corroborated else 'single_source_or_nonindependent'),'evidence_domains':sorted(domains),'evidence_families':len(families)})
     return result
 
 def analyze(events):
@@ -107,7 +131,7 @@ def analyze(events):
     if not SETTINGS.openai_api_key:return _fallback(events,'OPENAI_API_KEY is not configured',forecast)
     compact=_compact_events(events)
     context={'scenario_id':SCENARIO_ID,'scenario_question':SCENARIO_QUESTION,'pattern':{k:v for k,v in forecast.items() if k!='_events'},'evidence_chain':forecast.get('evidence_chain',{}),'events':compact}
-    payload={'model':SETTINGS.openai_model,'instructions':SYSTEM,'input':'Return only JSON. Analyze only the evidence below. '+json.dumps(context,ensure_ascii=False,separators=(',',':')),'text':{'format':{'type':'json_object'}},'max_output_tokens':1100,'store':False}
+    payload={'model':SETTINGS.openai_model,'instructions':SYSTEM,'input':'Return only JSON. Analyze only the evidence below. '+json.dumps(context,ensure_ascii=False,separators=(',',':')),'text':{'format':{'type':'json_object'}},'max_output_tokens':900,'store':False}
     try:
         r=requests.post('https://api.openai.com/v1/responses',headers={'Authorization':f'Bearer {SETTINGS.openai_api_key}','Content-Type':'application/json'},json=payload,timeout=60); r.raise_for_status(); result=_extract_json(_response_text(r.json()))
         if not isinstance(result,dict):raise ValueError('model JSON is not object')
