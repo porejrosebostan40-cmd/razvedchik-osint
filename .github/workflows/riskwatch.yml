@@ -57,19 +57,37 @@ jobs:
               if isinstance(out.get('snippet'),str): out['snippet']=out['snippet'][:700]
               if isinstance(out.get('title'),str): out['title']=out['title'][:500]
               return out
+          def compact_pattern(p):
+              if not isinstance(p,dict): return {}
+              keep=('scenario_id','pattern_stage','pattern_stage_name','observed_stages','next_stage','next_event_horizon','independent_domains','source_families','regions_with_signals','negative_indicators','acceleration','structure_score','evidence_score','evidence_metrics','interpretation','evidence_chain')
+              return {k:p[k] for k in keep if k in p}
+          def compact_decision(d):
+              keep=('ts','scenario_question','scenario_answer','probability','model_probability','probability_calibration','risk','model_risk','confidence','analysis_provider','reason','signals','missing_indicators','next_event','horizon','pattern','calibration','evidence_chain')
+              out={k:d[k] for k in keep if k in d}
+              if 'pattern' in out: out['pattern']=compact_pattern(out['pattern'])
+              if isinstance(out.get('signals'),list): out['signals']=out['signals'][:12]
+              if isinstance(out.get('missing_indicators'),list): out['missing_indicators']=out['missing_indicators'][:12]
+              return out
+          def compact_forecast(f):
+              keep=('forecast_id','scenario_id','created_ts','horizon','deadline_ts','target','predicted_stage','probability','raw_probability','issued_probability','structure_score','evidence_score','evidence_ids','evidence_fingerprint','resolved','outcome','resolved_ts','brier','issued_brier')
+              return {k:f[k] for k in keep if k in f}
           remote=json.loads(Path('riskwatch_state.json').read_text(encoding='utf-8'))
           local=json.loads(Path('/tmp/riskwatch_state.local.json').read_text(encoding='utf-8'))
           events={**remote.get('events',{}), **local.get('events',{})}
-          events=dict(sorted(events.items(), key=lambda kv: kv[1].get('ts',0))[-1200:])
+          events=dict(sorted(events.items(), key=lambda kv: kv[1].get('ts',0))[-500:])
           events={k:compact_event(v) for k,v in events.items()}
           decisions=remote.get('decisions',[])+local.get('decisions',[])
-          decisions=sorted(decisions,key=lambda x:x.get('ts',0))[-250:]
+          decisions=sorted(decisions,key=lambda x:x.get('ts',0))[-80:]
+          decisions=[compact_decision(x) for x in decisions]
           forecasts={}
           for item in remote.get('forecasts',[])+local.get('forecasts',[]):
               forecasts[item.get('forecast_id',str(len(forecasts)))]=item
-          forecasts=sorted(forecasts.values(),key=lambda x:x.get('created_ts',0))[-500:]
+          forecasts=sorted(forecasts.values(),key=lambda x:x.get('created_ts',0))[-200:]
+          forecasts=[compact_forecast(x) for x in forecasts]
           merged={'events':events,'decisions':decisions,'forecasts':forecasts,'last_ai_ts':max(float(remote.get('last_ai_ts',0)),float(local.get('last_ai_ts',0)))}
-          Path('riskwatch_state.json').write_text(json.dumps(merged,ensure_ascii=False,separators=(',',':')),encoding='utf-8')
+          payload=json.dumps(merged,ensure_ascii=False,separators=(',',':'))
+          if len(payload.encode('utf-8')) >= 90_000_000: raise SystemExit('Refusing to persist state above 90 MB')
+          Path('riskwatch_state.json').write_text(payload,encoding='utf-8')
           Path('riskwatch_latest.json').write_text(Path('/tmp/riskwatch_latest.local.json').read_text(encoding='utf-8'),encoding='utf-8')
           PY
             git add riskwatch_state.json riskwatch_latest.json
