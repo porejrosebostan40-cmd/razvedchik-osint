@@ -3,7 +3,7 @@
   "confidence": 40,
   "risk": 60,
   "decision": "WATCH",
-  "reason": "OpenAI analysis failed: HTTPError; deterministic fallback used",
+  "reason": "OpenAI analysis failed: HTTPError status=429; deterministic fallback used",
   "signals": [
     "official_or_primary_results=0",
     "regional_results=120"
