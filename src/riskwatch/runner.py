@@ -7,6 +7,7 @@ from .search import search
 from .store import Store
 from .ai import analyze
 from .forecast import build_forecast, forecast_record, resolve_forecasts, calibration_summary, calibrate_probability, render_context, _stage, _root_event
+from .evidence import build_evidence_graph, compact_chain
 
 BATCH_SIZE = 30
 MAX_WORKERS = 8
@@ -98,6 +99,9 @@ def run():
         store.replace_forecasts(resolved)
 
     pattern = build_forecast(all_events)
+    graph = build_evidence_graph(all_events)
+    chain = compact_chain(graph)
+    pattern['evidence_chain'] = chain
     calibration = calibration_summary(resolved)
     if store.ai_due():
         store.mark_ai_attempt()
@@ -120,6 +124,7 @@ def run():
     decision['risk'] = round(issued_probability) if issued_probability else 0
     decision['pattern'] = pattern
     decision['calibration'] = calibration
+    decision['evidence_chain'] = chain
     decision['scenario_question'] = SCENARIO_QUESTION
     decision['next_event'] = pattern.get('next_stage', 'UNKNOWN')
     decision['horizon'] = horizon or 'UNKNOWN'
@@ -134,12 +139,12 @@ def run():
     c = int(decision.get('confidence', 0))
     answer = decision.get('scenario_answer', 'UNKNOWN')
     calibrated = cal.get('status') in ('preliminary', 'measured')
-    structural_warning = (not calibrated and int(pattern.get('evidence_score', 0)) >= 75 and int(pattern.get('structure_score', 0)) >= 65)
+    structural_warning = (not calibrated and int(pattern.get('evidence_score', 0)) >= 75 and int(pattern.get('structure_score', 0)) >= 65 and int(chain.get('metrics', {}).get('chain_score', 0)) >= 55)
     if (calibrated and p >= SETTINGS.alert_threshold) or structural_warning:
         alert_type = 'CALIBRATED_RISK_ALERT' if calibrated else 'STRUCTURAL_WARNING_UNCALIBRATED'
-        telegram('RISKWATCH %s\n\n%s\n\nОтвет системы: %s\nКалиброванная вероятность: %s%%\nМодельная некалиброванная оценка: %s%%\nМодельный риск: %s/100\nУверенность модели: %s%%\n\nСледующий вероятный шаг: %s\nГоризонт: %s\n\n%s\n\nСигналы: %s\nОтсутствующие индикаторы: %s' % (
+        telegram('RISKWATCH %s\n\n%s\n\nОтвет системы: %s\nКалиброванная вероятность: %s%%\nМодельная некалиброванная оценка: %s%%\nМодельный риск: %s/100\nУверенность модели: %s%%\n\nСледующий вероятный шаг: %s\nГоризонт: %s\nЦепь доказательств: %s/100\n\n%s\n\nСигналы: %s\nОтсутствующие индикаторы: %s' % (
             alert_type, SCENARIO_QUESTION, answer, p, decision.get('model_probability', 0), decision.get('model_risk', 0), c,
-            decision.get('next_event', 'UNKNOWN'), decision.get('horizon', 'UNKNOWN'), decision.get('reason', ''),
+            decision.get('next_event', 'UNKNOWN'), decision.get('horizon', 'UNKNOWN'), chain.get('metrics', {}).get('chain_score', 0), decision.get('reason', ''),
             '; '.join(decision.get('signals', [])[:6]), '; '.join(decision.get('missing_indicators', [])[:6])
         ))
     return decision
