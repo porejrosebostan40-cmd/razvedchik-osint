@@ -41,6 +41,16 @@ def _response_text(data):
     return "\n".join(chunks)
 
 
+def _score(value):
+    if isinstance(value,(int,float)):
+        return max(0,min(100,int(value)))
+    if isinstance(value,str):
+        m=re.search(r"-?\d+(?:[.,]\d+)?",value.replace("%",""))
+        if m:
+            return max(0,min(100,int(float(m.group(0).replace(",",".")))))
+    raise ValueError(f"invalid score: {value!r}")
+
+
 def analyze(events):
     if not SETTINGS.openai_api_key:
         return _fallback(events,"OPENAI_API_KEY is not configured; deterministic fallback used")
@@ -61,7 +71,7 @@ def analyze(events):
         if not isinstance(result,dict):
             raise ValueError("model JSON is not an object")
         for k in ('probability','confidence','risk'):
-            result[k]=max(0,min(100,int(result.get(k,0))))
+            result[k]=_score(result.get(k,0))
         result.setdefault("decision","WATCH")
         result.setdefault("reason","OpenAI analysis completed")
         result.setdefault("signals",[])
