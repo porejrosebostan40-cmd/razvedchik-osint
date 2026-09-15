@@ -51,14 +51,29 @@ def _score(value):
     raise ValueError(f"invalid score: {value!r}")
 
 
+def _compact_events(events, limit=60):
+    compact=[]
+    for e in events[-limit:]:
+        compact.append({
+            "url":str(e.get("url",""))[:1000],
+            "title":str(e.get("title",""))[:500],
+            "snippet":str(e.get("snippet",""))[:700],
+            "region":str(e.get("region",""))[:120],
+            "kind":str(e.get("kind",""))[:160],
+            "source":str(e.get("source",""))[:80],
+        })
+    return compact
+
+
 def analyze(events):
     if not SETTINGS.openai_api_key:
         return _fallback(events,"OPENAI_API_KEY is not configured; deterministic fallback used")
+    compact_events=_compact_events(events)
     payload={
         "model":SETTINGS.openai_model,
         "input":[
             {"role":"system","content":SYSTEM},
-            {"role":"user","content":json.dumps({"scenario":"мобилизационные или связанные с ФСИН действия после 20 сентября 2026 года","events":events[-100:]},ensure_ascii=False)}
+            {"role":"user","content":json.dumps({"scenario":"мобилизационные или связанные с ФСИН действия после 20 сентября 2026 года","events":compact_events},ensure_ascii=False)}
         ],
         "text":{"format":{"type":"json_object"}},
         "store":False
@@ -78,5 +93,8 @@ def analyze(events):
         result.setdefault("missing_indicators",[])
         result["analysis_provider"]="openai"
         return result
+    except requests.HTTPError as exc:
+        status=getattr(exc.response,"status_code",None)
+        return _fallback(events,f"OpenAI analysis failed: HTTPError status={status}; deterministic fallback used")
     except (requests.RequestException, ValueError, TypeError, KeyError) as exc:
         return _fallback(events,f"OpenAI analysis failed: {type(exc).__name__}; deterministic fallback used")
