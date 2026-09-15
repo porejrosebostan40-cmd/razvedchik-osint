@@ -67,6 +67,11 @@ def test_evidence_score_is_not_probability():
     from riskwatch.forecast import evidence_score
     e=evidence_score([{"url":"https://fsin.gov.ru/a","title":"ФСИН подготовила списки заключенных для отбора на военную службу","snippet":""}]); assert 0<=e["score"]<=100
 
+def test_source_family_independence_ignores_search_engines_and_subdomains():
+    from riskwatch.forecast import evidence_score
+    events=[{"url":"https://www.example.com/a","title":"заключенные привлечены к военной службе","snippet":""},{"url":"https://news.example.com/b","title":"заключенные привлечены к военной службе","snippet":""},{"url":"https://www.bing.com/search?q=x","title":"заключенные привлечены к военной службе","snippet":""}]
+    e=evidence_score(events); assert e["source_families"]==1 and e["independent_domains"]==1
+
 def test_root_forecast_resolves_only_on_root_event():
     from riskwatch.forecast import build_forecast, forecast_record, resolve_forecasts
     f=build_forecast([{"url":"https://government.ru/a","title":"изменен порядок"}]); r=forecast_record(f,73,now=1000,evidence_ids=["x"]); unrelated={"url":"https://example.org/x","title":"призван на военную службу","published_ts":999}; done=resolve_forecasts([r],[unrelated],now=r["deadline_ts"]+1)[0]; assert done["resolved"] and done["outcome"]==0
