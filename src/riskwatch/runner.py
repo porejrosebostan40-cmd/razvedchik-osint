@@ -23,7 +23,7 @@ def _region(label):
     return ''
 
 
-def _queries(now=None):
+def _queries(cursor=0):
     terms = ' OR '.join(f'"{x}"' for x in CORE_TERMS)
     core = [(n, t.format(terms=terms)) for n, t in SOURCE_TEMPLATES]
     regional = []
@@ -31,11 +31,10 @@ def _queries(now=None):
         for n, t in REGIONAL_TEMPLATES:
             regional.append((f'{n}: {r}', t.format(region=r, terms=terms)))
     if not regional:
-        return core
-    now = now or datetime.now(timezone.utc)
-    slot = int(now.timestamp() // 60) // 20
-    start = (slot * BATCH_SIZE) % len(regional)
-    return core + [regional[(start + i) % len(regional)] for i in range(min(BATCH_SIZE, len(regional)))]
+        return core, cursor
+    start = int(cursor or 0) % len(regional)
+    batch = [regional[(start + i) % len(regional)] for i in range(min(BATCH_SIZE, len(regional)))]
+    return core + batch, (start + len(batch)) % len(regional)
 
 
 def _collect_one(item):
@@ -182,7 +181,8 @@ def _retrieval_telemetry(items, collected, new_events=0, previous_total=0):
 def run():
     store = Store()
     events = []
-    items = _queries()
+    cursor = int(store.get_meta('regional_cursor', 0) or 0)
+    items, next_cursor = _queries(cursor)
     collected = {}
     with ThreadPoolExecutor(max_workers=MAX_WORKERS) as pool:
         futures = {pool.submit(_collect_one, item): i for i, item in enumerate(items)}
@@ -192,6 +192,7 @@ def run():
             collected[i] = result
             events.extend(result)
 
+    store.set_meta('regional_cursor', next_cursor)
     previous_total = len(store.recent(3000))
     new_events = store.add_events(events)
     all_events = store.recent(3000)
@@ -199,7 +200,6 @@ def run():
     if resolved != store.forecasts():
         store.replace_forecasts(resolved)
 
-    # Forecast metrics must be scenario-relevant, not inflated by generic retrieval noise.
     scenario_events = [e for e in all_events if _has_target(e)]
     pattern = build_forecast(scenario_events)
     graph = build_evidence_graph(all_events)
@@ -207,8 +207,6 @@ def run():
     pattern['evidence_chain'] = chain
     pattern['retrieval'] = _retrieval_telemetry(items, collected, new_events, previous_total)
 
-    # Hard invariant: an empty evidence graph cannot produce a non-baseline forecast.
-    # This prevents stale/phantom stages from contaminating calibration.
     if not all_events or not graph.get('nodes'):
         pattern = build_forecast([])
         pattern['evidence_chain'] = chain
