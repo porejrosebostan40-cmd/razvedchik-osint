@@ -1,9 +1,18 @@
 import hashlib, json, os, time
+from urllib.parse import urlparse
 
 MAX_EVENTS = 3000
 MAX_DECISIONS = 500
 MAX_FORECASTS = 1000
 AI_INTERVAL_SECONDS = 3600
+SEARCH_ENGINE_DOMAINS=('duckduckgo.com','bing.com','google.com','yandex.ru','yandex.com')
+
+def _valid_event(e):
+    try:
+        d=urlparse(str(e.get('url',''))).netloc.lower().split(':')[0].removeprefix('www.')
+    except Exception:
+        return False
+    return bool(d) and d not in SEARCH_ENGINE_DOMAINS and not any(d.endswith('.'+x) for x in SEARCH_ENGINE_DOMAINS)
 
 class Store:
     def __init__(self,path=None):
@@ -20,6 +29,8 @@ class Store:
     def add_events(self,events):
         n=0
         for e in events:
+            if not _valid_event(e):
+                continue
             eid=hashlib.sha256((e.get('url','')+'|'+e.get('title','')).encode()).hexdigest()
             if eid not in self.data["events"]:
                 self.data["events"][eid]={**e,"ts":time.time()}; n+=1
@@ -29,7 +40,8 @@ class Store:
         self._save(); return n
 
     def recent(self,limit=120):
-        return sorted(self.data["events"].values(),key=lambda x:x.get("ts",0))[-limit:]
+        events=[e for e in self.data["events"].values() if _valid_event(e)]
+        return sorted(events,key=lambda x:x.get("ts",0))[-limit:]
 
     def ai_due(self, now=None):
         return (now or time.time()) - float(self.data.get("last_ai_ts",0)) >= AI_INTERVAL_SECONDS
@@ -60,6 +72,6 @@ class Store:
 
     def _save(self):
         tmp=self.path+'.tmp'
-        with open(tmp,'w',encoding='utf-8') as f:
+        with open(tmp,'w',encoding="utf-8") as f:
             json.dump(self.data,f,ensure_ascii=False,indent=2)
         os.replace(tmp,self.path)
