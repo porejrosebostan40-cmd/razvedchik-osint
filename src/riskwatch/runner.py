@@ -31,10 +31,13 @@ def _queries(cursor=0):
         for n, t in REGIONAL_TEMPLATES:
             regional.append((f'{n}: {r}', t.format(region=r, terms=terms)))
     if not regional:
-        return core, cursor
+        return core, cursor, False
     start = int(cursor or 0) % len(regional)
-    batch = [regional[(start + i) % len(regional)] for i in range(min(BATCH_SIZE, len(regional)))]
-    return core + batch, (start + len(batch)) % len(regional)
+    batch_len = min(BATCH_SIZE, len(regional))
+    batch = [regional[(start + i) % len(regional)] for i in range(batch_len)]
+    next_cursor = (start + batch_len) % len(regional)
+    wrapped = next_cursor < start
+    return core + batch, next_cursor, wrapped
 
 
 def _collect_one(item):
@@ -44,9 +47,9 @@ def _collect_one(item):
         for e in results:
             e['region'] = _region(label)
             e['kind'] = label
-        return results
+        return results, False
     except Exception:
-        return []
+        return [], True
 
 
 def _throttled_decision(store):
@@ -182,19 +185,25 @@ def run():
     store = Store()
     events = []
     cursor = int(store.get_meta('regional_cursor', 0) or 0)
-    items, next_cursor = _queries(cursor)
+    cycle = int(store.get_meta('regional_cycle', 0) or 0)
+    items, next_cursor, wrapped = _queries(cursor)
     collected = {}
+    collection_failed = False
     with ThreadPoolExecutor(max_workers=MAX_WORKERS) as pool:
         futures = {pool.submit(_collect_one, item): i for i, item in enumerate(items)}
         for future in as_completed(futures):
             i = futures[future]
-            result = future.result()
+            result, failed = future.result()
             collected[i] = result
+            collection_failed = collection_failed or failed
             events.extend(result)
 
-    store.set_meta('regional_cursor', next_cursor)
     previous_total = len(store.recent(3000))
     new_events = store.add_events(events)
+    if not collection_failed:
+        store.set_meta('regional_cursor', next_cursor)
+        if wrapped:
+            store.set_meta('regional_cycle', cycle + 1)
     all_events = store.recent(3000)
     resolved = _resolve_forecasts(store.forecasts(), all_events)
     if resolved != store.forecasts():
@@ -206,11 +215,19 @@ def run():
     chain = compact_chain(graph)
     pattern['evidence_chain'] = chain
     pattern['retrieval'] = _retrieval_telemetry(items, collected, new_events, previous_total)
+    pattern['retrieval']['regional_cursor'] = int(store.get_meta('regional_cursor', 0) or 0)
+    pattern['retrieval']['regional_cycle'] = int(store.get_meta('regional_cycle', 0) or 0)
+    pattern['retrieval']['regional_batch_wrapped'] = wrapped
+    pattern['retrieval']['regional_collection_failed'] = collection_failed
 
     if not all_events or not graph.get('nodes'):
         pattern = build_forecast([])
         pattern['evidence_chain'] = chain
         pattern['retrieval'] = _retrieval_telemetry(items, collected, new_events, previous_total)
+        pattern['retrieval']['regional_cursor'] = int(store.get_meta('regional_cursor', 0) or 0)
+        pattern['retrieval']['regional_cycle'] = int(store.get_meta('regional_cycle', 0) or 0)
+        pattern['retrieval']['regional_batch_wrapped'] = wrapped
+        pattern['retrieval']['regional_collection_failed'] = collection_failed
         decision = _no_evidence_decision(pattern, chain)
         decision['calibration'] = calibration_summary(resolved)
         decision['probability_calibration'] = {'probability': None, 'status': 'no_evidence', 'sample': len([r for r in resolved if r.get('resolved')])}
