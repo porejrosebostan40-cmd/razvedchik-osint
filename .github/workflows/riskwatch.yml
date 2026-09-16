@@ -1,6 +1,9 @@
 name: RiskWatch
 on:
   workflow_dispatch:
+  push:
+    paths:
+      - 'src/riskwatch/**'
   schedule:
     - cron: '7,27,47 * * * *'
 concurrency:
@@ -32,6 +35,7 @@ jobs:
           TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
           TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
           RISKWATCH_STATE: riskwatch_state.json
+          RISKWATCH_DEBUG_HTML: /tmp/riskwatch_search_debug.html
           MAX_RESULTS_PER_QUERY: '6'
         run: python -m riskwatch.cli > riskwatch_latest.json
       - name: Persist state safely
@@ -68,7 +72,7 @@ jobs:
               keep=('scenario_id','pattern_stage','pattern_stage_name','observed_stages','next_stage','next_event_horizon','independent_domains','source_families','regions_with_signals','negative_indicators','acceleration','structure_score','evidence_score','evidence_metrics','interpretation','evidence_chain','retrieval')
               return {k:p[k] for k in keep if k in p}
           def compact_decision(d):
-              keep=('ts','scenario_question','scenario_answer','probability','model_probability','probability_calibration','risk','model_risk','confidence','analysis_provider','reason','signals','missing_indicators','next_event','horizon','pattern','calibration','evidence_chain')
+              keep=('ts','scenario_question','scenario_answer','probability','model_probability','probability_calibration','risk','model_risk','confidence','analysis_provider','reason','signals','missing_indicators','next_event','horizon','pattern','calibration','evidence_chain','analytical_status','hallucination_guard')
               out={k:d[k] for k in keep if k in d}
               if 'pattern' in out: out['pattern']=compact_pattern(out['pattern'])
               if isinstance(out.get('signals'),list): out['signals']=out['signals'][:12]
@@ -112,4 +116,11 @@ jobs:
         with:
           name: riskwatch-latest
           path: riskwatch_latest.json
-# production monitor: schedule/manual only; code changes are verified by CI
+      - name: Upload raw search debug
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: riskwatch-search-debug
+          path: /tmp/riskwatch_search_debug.html
+          if-no-files-found: ignore
+# production monitor: schedule/manual plus source-change trigger for live diagnostics
