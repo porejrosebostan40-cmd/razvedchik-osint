@@ -2,7 +2,7 @@ name: RiskWatch
 on:
   workflow_dispatch:
   schedule:
-    - cron: '7,27,47 * * * *'
+    - cron: '* * * * *'
 concurrency:
   group: riskwatch-main
   cancel-in-progress: false
@@ -100,4 +100,4 @@ jobs:
         with:
           name: riskwatch-latest
           path: riskwatch_latest.json
-# production monitor: schedule/manual only; code changes are verified by CI
+# temporary production E2E trigger; restore after verification
