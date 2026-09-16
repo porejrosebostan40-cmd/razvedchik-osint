@@ -113,3 +113,16 @@ def test_valid_unknown_passes_gate_and_is_analytically_ok():
     assert result['probability'] is None
     assert result['confidence'] == 0
     assert runner._analytical_status(result) == 'OK'
+
+
+def test_indeterminate_passes_gate_and_is_analytically_ok():
+    import riskwatch.ai as ai
+    import riskwatch.runner as runner
+    event = {'url': 'https://fsin.gov.ru/a', 'title': 'ФСИН порядок для заключенных', 'snippet': 'порядок'}
+    result = ai._validate({'verdict': 'indeterminate', 'facts': [], 'inferences': []}, [event], {'pattern_stage': 0, 'structure_score': 8})
+    assert result['hallucination_guard'] == 'passed_evidence_gate_valid_unknown'
+    assert result['analysis_provider'] == 'openai'
+    assert result['scenario_answer'] == 'UNKNOWN'
+    assert result['probability'] is None
+    assert result['confidence'] == 0
+    assert runner._analytical_status(result) == 'OK'
