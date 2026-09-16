@@ -48,7 +48,16 @@ jobs:
             python - <<'PY'
           import json
           from pathlib import Path
+          from urllib.parse import urlparse
+          SEARCH_ENGINES=('duckduckgo.com','bing.com','google.com','yandex.ru','yandex.com')
+          def valid_event(e):
+              try:
+                  d=urlparse(str(e.get('url',''))).netloc.lower().split(':')[0].removeprefix('www.')
+              except Exception:
+                  return False
+              return bool(d) and d not in SEARCH_ENGINES and not any(d.endswith('.'+x) for x in SEARCH_ENGINES)
           def compact_event(e):
+              if not valid_event(e): return None
               keep=('url','title','snippet','source','query','region','kind','ts','published_ts','published','date')
               out={k:e[k] for k in keep if k in e}
               if isinstance(out.get('snippet'),str): out['snippet']=out['snippet'][:700]
@@ -56,7 +65,7 @@ jobs:
               return out
           def compact_pattern(p):
               if not isinstance(p,dict): return {}
-              keep=('scenario_id','pattern_stage','pattern_stage_name','observed_stages','next_stage','next_event_horizon','independent_domains','source_families','regions_with_signals','negative_indicators','acceleration','structure_score','evidence_score','evidence_metrics','interpretation','evidence_chain')
+              keep=('scenario_id','pattern_stage','pattern_stage_name','observed_stages','next_stage','next_event_horizon','independent_domains','source_families','regions_with_signals','negative_indicators','acceleration','structure_score','evidence_score','evidence_metrics','interpretation','evidence_chain','retrieval')
               return {k:p[k] for k in keep if k in p}
           def compact_decision(d):
               keep=('ts','scenario_question','scenario_answer','probability','model_probability','probability_calibration','risk','model_risk','confidence','analysis_provider','reason','signals','missing_indicators','next_event','horizon','pattern','calibration','evidence_chain')
@@ -71,8 +80,11 @@ jobs:
           remote=json.loads(Path('riskwatch_state.json').read_text(encoding='utf-8'))
           local=json.loads(Path('/tmp/riskwatch_state.local.json').read_text(encoding='utf-8'))
           events={**remote.get('events',{}), **local.get('events',{})}
-          events=dict(sorted(events.items(), key=lambda kv: kv[1].get('ts',0))[-500:])
-          events={k:compact_event(v) for k,v in events.items()}
+          cleaned=[]
+          for k,v in events.items():
+              c=compact_event(v)
+              if c is not None: cleaned.append((k,c))
+          events=dict(sorted(cleaned,key=lambda kv:kv[1].get('ts',0))[-500:])
           decisions=remote.get('decisions',[])+local.get('decisions',[])
           decisions=sorted(decisions,key=lambda x:x.get('ts',0))[-80:]
           decisions=[compact_decision(x) for x in decisions]
