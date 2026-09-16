@@ -6,11 +6,9 @@ from .config import SETTINGS, REGIONS, SOURCE_TEMPLATES, REGIONAL_TEMPLATES, COR
 from .search import search
 from .store import Store
 from .ai import analyze
-from .forecast import build_forecast, forecast_record, calibration_summary, calibrate_probability, render_context, _stage, _timestamp, _brier
+from .forecast import build_forecast, forecast_record, calibration_summary, calibrate_probability, render_context, _stage, _timestamp, _brier, _has_target
 from .evidence import build_evidence_graph, compact_chain
 from .semantics import safe_root_event
-
-# live retrieval diagnostic trigger
 
 BATCH_SIZE = 30
 MAX_WORKERS = 8
@@ -76,7 +74,7 @@ def _no_evidence_decision(pattern, chain):
         'risk': None,
         'model_risk': None,
         'decision': 'WATCH',
-        'reason': 'No valid public-source events survived retrieval/URL validation; analysis not performed',
+        'reason': 'No target-specific evidence events survived retrieval/URL validation; analysis not performed',
         'facts': [],
         'inferences': [],
         'evidence_event_ids': [],
@@ -91,6 +89,17 @@ def _no_evidence_decision(pattern, chain):
         'evidence_chain': chain,
         'analytical_status': 'FAILED_NO_EVIDENCE',
     }
+
+
+def _analytical_status(decision):
+    provider = decision.get('analysis_provider')
+    if provider == 'fallback':
+        return 'FAILED_AI'
+    if provider == 'not_called' or provider == 'cached':
+        return 'NOT_ATTEMPTED'
+    if provider == 'openai' and str(decision.get('hallucination_guard', '')).startswith('passed_evidence_gate'):
+        return 'OK'
+    return 'FAILED_AI'
 
 
 def telegram(text):
@@ -190,7 +199,9 @@ def run():
     if resolved != store.forecasts():
         store.replace_forecasts(resolved)
 
-    pattern = build_forecast(all_events)
+    # Forecast metrics must be scenario-relevant, not inflated by generic retrieval noise.
+    scenario_events = [e for e in all_events if _has_target(e)]
+    pattern = build_forecast(scenario_events)
     graph = build_evidence_graph(all_events)
     chain = compact_chain(graph)
     pattern['evidence_chain'] = chain
@@ -217,8 +228,6 @@ def run():
         if decision is None:
             decision = analyze(all_events)
 
-    # A non-calibrated/fallback/guarded decision may legitimately carry null probability.
-    # Keep the model layer numeric for downstream calibration without turning null into a public 0% estimate.
     raw_model_probability = decision.get('probability')
     model_probability = int(raw_model_probability) if isinstance(raw_model_probability, (int, float)) else 0
     horizon = pattern.get('next_event_horizon')
@@ -239,7 +248,7 @@ def run():
     decision['next_event'] = pattern.get('next_stage', 'UNKNOWN')
     decision['horizon'] = horizon or 'UNKNOWN'
     decision['forecast_basis'] = render_context(pattern, calibration)
-    decision['analytical_status'] = 'FAILED_AI' if decision.get('analysis_provider') == 'fallback' else 'OK'
+    decision['analytical_status'] = _analytical_status(decision)
 
     evidence_ids = _evidence_ids(all_events)
     if not _episode_duplicate(store, pattern, evidence_ids):
