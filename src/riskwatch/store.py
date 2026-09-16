@@ -25,6 +25,15 @@ class Store:
         self.data.setdefault("decisions",[])
         self.data.setdefault("forecasts",[])
         self.data.setdefault("last_ai_ts",0)
+        self.data.setdefault("regional_cursor",0)
+        self.data.setdefault("regional_cycle",0)
+
+    def get_meta(self,key,default=None):
+        return self.data.get(key,default)
+
+    def set_meta(self,key,value):
+        self.data[key]=value
+        self._save()
 
     def add_events(self,events):
         n=0
