@@ -1,4 +1,5 @@
 import hashlib
+import re
 from collections import defaultdict
 from datetime import datetime, timezone
 from urllib.parse import urlsplit
@@ -10,11 +11,14 @@ STAGES = {
     2: ("administrative_preparation", ("распоряж", "поручен", "поручён", "инструкц", "совещан", "штаб", "подготов", "провер", "список", "учет", "учёт", "комисси")),
     3: ("organizational_or_logistical_action", ("формирован", "комплектован", "резерв", "контракт", "личный состав", "транспорт", "места", "размещен", "размещён", "снабжен", "снабж")),
     4: ("operational_implementation", ("направлен", "отправлен", "призван", "зачислен", "переведен", "переведён", "реализован", "исполнен", "начал")),
-    5: ("root_scenario", ("осужден", "осуждён", "заключен", "заключён", "исправительн", "колони", "мест лишения свободы", "лишения свободы")),
+    5: ("root_scenario", ()),
 }
 NEGATIVE_TERMS = ("опроверг", "не подтверд", "отменен", "отменён", "отказ", "не планируется", "ложн", "фейк", "исключен", "исключён")
 TARGET_TERMS = ("осужден", "осуждён", "заключен", "заключён", "исправительн", "колони", "мест лишения свободы", "фсин", "уфсин", "фку", "содержащихся")
 ACTION_TERMS = ("мобилиз", "привлеч", "военн", "контракт", "зачислен", "направлен", "отправлен", "призван", "служб", "отбор", "медицин", "список", "учет", "учёт", "квот", "транспорт")
+MILITARY_ANCHORS = ("мобилиз", "военн", "военком", "военнослуж", "арм", "сво", "вооружен", "вооружён", "министерств оборон", "минобороны", "вооруженные силы", "вооружённые силы")
+DIRECT_ACTION_TERMS = ("привлеч", "зачислен", "зачислён", "направлен", "отправлен", "отправл", "призван", "заключил контракт", "заключен контракт", "заключён контракт", "начал службу")
+NEGATION_RE = re.compile(r"\bне\s+(?:будут|будет|стал|стали|станут|привлеч|зачислен|зачислён|направлен|отправлен|призван|мобилиз)")
 PRIMARY_DOMAINS = ("kremlin.ru", "government.ru", "mil.ru", "fsin.gov.ru", "publication.pravo.gov.ru", "minjust.gov.ru", "duma.gov.ru", "zakupki.gov.ru", "gov.ru")
 SEARCH_ENGINES = ("duckduckgo.com", "bing.com", "google.com", "yandex.ru", "yandex.com")
 
@@ -42,15 +46,47 @@ def _text(e):
     return (str(e.get("title", "")) + " " + str(e.get("snippet", ""))).lower()
 
 
+def _has_target(e):
+    text = _text(e)
+    return any(term in text for term in TARGET_TERMS)
+
+
+def _is_negative(e):
+    text = _text(e)
+    return any(term in text for term in NEGATIVE_TERMS) or bool(NEGATION_RE.search(text))
+
+
+def _has_military_anchor(e):
+    text = _text(e)
+    return any(term in text for term in MILITARY_ANCHORS)
+
+
+def _has_direct_military_action(e):
+    text = _text(e)
+    return _has_target(e) and _has_military_anchor(e) and any(term in text for term in DIRECT_ACTION_TERMS) and not _is_negative(e)
+
+
+def _root_event(e):
+    """Strict root event: target-specific military action, not generic prison news."""
+    return _has_direct_military_action(e)
+
+
 def _stage(e):
     text = _text(e)
-    target = sum(term in text for term in TARGET_TERMS)
-    action = sum(term in text for term in ACTION_TERMS)
+    if _root_event(e):
+        return 5
+    target = _has_target(e)
     hits = []
     for n, (_, terms) in STAGES.items():
+        if n == 5:
+            continue
         score = sum(1 for term in terms if term in text)
-        if score and not (n == 5 and target == 0):
-            hits.append((score + (3 if n == 5 and action else 0), n))
+        if score:
+            # Administrative/organizational signals only become scenario-relevant
+            # when they mention the target population; generic military news does not.
+            if n >= 2 and not target:
+                continue
+            hits.append((score, n))
     return max(hits)[1] if hits else 0
 
 
@@ -77,12 +113,7 @@ def _is_primary(e):
 
 
 def _target_events(events):
-    return [e for e in events if any(t in _text(e) for t in TARGET_TERMS)]
-
-
-def _root_event(e):
-    text = _text(e)
-    return sum(t in text for t in TARGET_TERMS) >= 1 and sum(t in text for t in ACTION_TERMS) >= 2
+    return [e for e in events if _has_target(e)]
 
 
 def evidence_score(events):
@@ -92,7 +123,7 @@ def evidence_score(events):
     families = {_source_family(e) for e in target if _source_family(e) and _source_family(e) not in SEARCH_ENGINES}
     primary = sum(_is_primary(e) for e in target)
     direct = 30 if any(_root_event(e) for e in events) else 0
-    neg = sum(any(t in _text(e) for t in NEGATIVE_TERMS) for e in events)
+    neg = sum(_is_negative(e) for e in events)
     score = max(0, min(100, min(30, len(action) * 8) + min(25, max(0, len(families) - 1) * 8) + min(25, primary * 10) + direct - min(35, neg * 8)))
     return {"score": score, "target_events": len(target), "action_events": len(action), "independent_domains": len(families), "source_families": len(families), "primary_events": primary, "negative_indicators": neg}
 
@@ -103,7 +134,7 @@ def build_forecast(events):
     max_stage = max(active, default=0)
     families = {_source_family(e) for e in events if _source_family(e) and _source_family(e) not in SEARCH_ENGINES}
     regions = {str(e.get("region", "")).strip() for e in events if str(e.get("region", "")).strip()}
-    negative = sum(any(t in _text(e) for t in NEGATIVE_TERMS) for e in events)
+    negative = sum(_is_negative(e) for e in events)
     now = datetime.now(timezone.utc).timestamp()
     recent = sum(1 for e in events if _timestamp(e) and 0 <= now - _timestamp(e) <= 3 * 86400)
     older = sum(1 for e in events if _timestamp(e) and 3 * 86400 < now - _timestamp(e) <= 14 * 86400)
@@ -119,7 +150,7 @@ def build_forecast(events):
         nxt, horizon = "organizational_or_logistical_action", "3-14d"
     else:
         nxt, horizon = "administrative_preparation", "7-30d"
-    return {"scenario_id": SCENARIO_ID, "pattern_stage": max_stage, "pattern_stage_name": STAGES[max_stage][0], "observed_stages": [STAGES[n][0] for n in active], "next_stage": nxt, "next_event_horizon": horizon, "independent_domains": len(families), "source_families": len(families), "regions_with_signals": len(regions), "negative_indicators": negative, "acceleration": acceleration, "structure_score": structure, "evidence_score": ev["score"], "evidence_metrics": ev, "interpretation": "ordered multi-stage chain is forming" if len(active) >= 2 and max_stage >= 2 else "isolated or early-stage signals; chain not established", "_events": events}
+    return {"scenario_id": SCENARIO_ID, "pattern_stage": max_stage, "pattern_stage_name": STAGES[max_stage][0], "observed_stages": [STAGES[n][0] for n in active], "next_stage": nxt, "next_event_horizon": horizon, "independent_domains": len(families), "source_families": len(families), "regions_with_signals": len(regions), "acceleration": acceleration, "structure_score": structure, "evidence_score": ev["score"], "evidence_metrics": ev, "negative_indicators": negative, "interpretation": "ordered multi-stage chain is forming" if len(active) >= 2 and max_stage >= 2 else "isolated or early-stage signals; chain not established", "_events": events}
 
 
 def _deadline(now, horizon):
@@ -146,9 +177,12 @@ def forecast_record(forecast, probability, now=None, evidence_ids=None, calibrat
 def _root_outcome(events, start_ts=None, end_ts=None):
     for e in events:
         ts = _timestamp(e)
-        if start_ts is not None and ts and ts < start_ts:
+        # An undated event cannot resolve a time-bounded forecast.
+        if not ts:
             continue
-        if end_ts is not None and ts and ts > end_ts:
+        if start_ts is not None and ts < start_ts:
+            continue
+        if end_ts is not None and ts > end_ts:
             continue
         if _root_event(e):
             return True
@@ -188,13 +222,13 @@ def calibrate_probability(raw_probability, records, horizon=None):
         if len(horizon_done) >= 30:
             done = horizon_done
     n = len(done)
-    if n < 30:
-        return {"probability": 0, "status": "insufficient_history", "sample": n, "raw": int(raw_probability), "horizon": horizon}
     raw = max(0, min(100, int(raw_probability)))
+    if n < 30:
+        return {"probability": None, "status": "insufficient_history", "sample": n, "raw": raw, "horizon": horizon}
     bucket = min(9, raw // 10)
     prior = [r for r in done if min(9, int(r.get("raw_probability", r.get("probability", 0))) // 10) == bucket]
     if len(prior) < 5:
-        return {"probability": 0, "status": "insufficient_bin_history", "sample": n, "bin_sample": len(prior), "raw": raw, "horizon": horizon}
+        return {"probability": None, "status": "insufficient_bin_history", "sample": n, "bin_sample": len(prior), "raw": raw, "horizon": horizon}
     rate = (sum(int(r.get("outcome", 0)) for r in prior) + 1) / (len(prior) + 2)
     return {"probability": round(rate * 100, 1), "status": "preliminary" if n < 100 else "measured", "sample": n, "bin_sample": len(prior), "raw": raw, "horizon": horizon}
 
