@@ -64,7 +64,7 @@ def test_pattern_structure_score_equals_runner_signals(monkeypatch):
         def replace_forecasts(self, records): pass
         def ai_due(self): return True
         def mark_ai_attempt(self): pass
-        def last_decision(self,): return None
+        def last_decision(self, decision=None): return None
         def save_decision(self, decision): self.decision = decision
         def save_forecast(self, forecast): pass
     store = FakeStore()
@@ -100,3 +100,16 @@ def test_ai_called_retains_usage_on_gate_rejection(monkeypatch):
     assert result['reason'] == 'AI claims failed semantic evidence gate; rejected'
     assert result['usage']['total_tokens'] == 20
     assert 'build_forecast' not in inspect.getsource(ai)
+
+
+def test_valid_unknown_passes_gate_and_is_analytically_ok():
+    import riskwatch.ai as ai
+    import riskwatch.runner as runner
+    event = {'url': 'https://fsin.gov.ru/a', 'title': 'ФСИН порядок для заключенных', 'snippet': 'порядок'}
+    result = ai._validate({'verdict': 'undetermined', 'facts': [], 'inferences': []}, [event], {'pattern_stage': 0, 'structure_score': 8})
+    assert result['hallucination_guard'] == 'passed_evidence_gate_valid_unknown'
+    assert result['analysis_provider'] == 'openai'
+    assert result['scenario_answer'] == 'UNKNOWN'
+    assert result['probability'] is None
+    assert result['confidence'] == 0
+    assert runner._analytical_status(result) == 'OK'
