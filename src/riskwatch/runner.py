@@ -145,7 +145,7 @@ def _resolve_forecasts(records, events, now=None):
     return out
 
 
-def _retrieval_telemetry(items, collected, new_events, previous_total):
+def _retrieval_telemetry(items, collected, new_events=0, previous_total=0):
     regional_items = [x for x in items if x[0].startswith(('regional', 'region')) or ': ' in x[0]]
     with_results = sum(bool(collected.get(i, [])) for i in range(len(items)))
     regional_with_results = sum(bool(collected.get(i, [])) for i, item in enumerate(items) if item in regional_items)
