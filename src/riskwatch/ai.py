@@ -121,9 +121,10 @@ def _validate(result,events,forecast=None):
     if answer=='NO' and not any(_has_negative(e) for e in linked_events):answer='UNKNOWN'
     if c>p:c=p
     result.update({'scenario_id':SCENARIO_ID,'scenario_question':SCENARIO_QUESTION,'scenario_answer':answer,'probability':p,'confidence':c,'risk':min(r,p),'facts':facts,'inferences':inf,'evidence_event_ids':used,'missing_indicators':result.get('missing_indicators',[]) if isinstance(result.get('missing_indicators',[]),list) else [],'next_event':str(result.get('next_event','UNKNOWN'))[:500] or 'UNKNOWN','horizon':str(result.get('horizon','UNKNOWN'))[:100] or 'UNKNOWN','forecast_basis':str(result.get('forecast_basis',''))[:900],'pattern':forecast,'hallucination_guard':'passed_evidence_gate_v2','evidence_quality':'corroborated_primary' if corroborated and primary else ('corroborated' if corroborated else 'single_source_or_nonindependent'),'evidence_domains':sorted(domains),'evidence_families':len(effective_families),'evidence_origins':len(origins),'analysis_provider':'openai'}); return result
-def _save_ai_debug(response_data):
+def _save_ai_debug(response_data,validated=None):
     try:
-        raw=json.dumps(response_data,ensure_ascii=False,separators=(',',':'))
+        payload={'response':response_data,'validation':validated}
+        raw=json.dumps(payload,ensure_ascii=False,separators=(',',':'))
         raw=raw[:180000]
         Path('/tmp/riskwatch_ai_debug.json').write_text(raw,encoding='utf-8')
     except Exception as e:
@@ -144,9 +145,9 @@ def analyze(events,forecast,evidence_graph=None):
         result.setdefault('decision','WATCH'); result.setdefault('reason','OpenAI analysis completed')
         print(f"DEBUG: AI raw verdict={result.get('verdict')!r}")
         validated=_validate(result,events,forecast); validated['usage']=usage
-        if validated.get('reason')=='AI claims failed semantic evidence gate; rejected':
+        if validated.get('reason'):
             print(f"DEBUG: calling _save_ai_debug, reason={validated.get('reason')!r}")
-            _save_ai_debug(response)
+            _save_ai_debug(response,validated)
             print(f"DEBUG: after _save_ai_debug, file exists={Path('/tmp/riskwatch_ai_debug.json').exists()}")
         return validated
     except requests.HTTPError as e:
