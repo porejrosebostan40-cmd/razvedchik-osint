@@ -217,17 +217,20 @@ def run():
         if decision is None:
             decision = analyze(all_events)
 
-    model_probability = int(decision.get('probability', 0))
+    # A non-calibrated/fallback/guarded decision may legitimately carry null probability.
+    # Keep the model layer numeric for downstream calibration without turning null into a public 0% estimate.
+    raw_model_probability = decision.get('probability')
+    model_probability = int(raw_model_probability) if isinstance(raw_model_probability, (int, float)) else 0
     horizon = pattern.get('next_event_horizon')
     cal = calibrate_probability(model_probability, resolved, horizon=horizon)
     calibrated = cal.get('status') in ('preliminary', 'measured')
     calibrated_probability = float(cal.get('probability')) if calibrated else None
     issued_probability = calibrated_probability if calibrated else None
 
-    decision['model_probability'] = model_probability
+    decision['model_probability'] = model_probability if raw_model_probability is not None else None
     decision['probability'] = issued_probability
     decision['probability_calibration'] = cal
-    decision['model_risk'] = int(decision.get('risk', 0))
+    decision['model_risk'] = int(decision.get('risk', 0)) if decision.get('risk') is not None else 0
     decision['risk'] = round(issued_probability) if calibrated else None
     decision['pattern'] = pattern
     decision['calibration'] = calibration
