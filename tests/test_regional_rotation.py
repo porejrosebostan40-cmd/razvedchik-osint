@@ -1,5 +1,5 @@
 from riskwatch.config import REGIONS, REGIONAL_TEMPLATES
-from riskwatch.runner import BATCH_SIZE, _queries
+from riskwatch.runner import BATCH_SIZE, _queries_from_cursor
 from riskwatch.store import Store
 
 
@@ -9,7 +9,7 @@ def test_regional_rotation_covers_all_queries_in_27_runs_without_overlap():
     cursor = 0
     batches = []
     for _ in range(27):
-        items, next_cursor, wrapped = _queries(cursor)
+        items, next_cursor, wrapped = _queries_from_cursor(cursor)
         regional = tuple(items[len(items) - BATCH_SIZE:])
         batches.append(regional)
         cursor = next_cursor
@@ -26,7 +26,7 @@ def test_regional_rotation_wraps_only_on_final_partial_batch():
     cursor = 0
     wrapped = []
     for _ in range(27):
-        items, next_cursor, did_wrap = _queries(cursor)
+        items, next_cursor, did_wrap = _queries_from_cursor(cursor)
         wrapped.append(did_wrap)
         cursor = next_cursor
     assert wrapped[:-1] == [False] * 26
