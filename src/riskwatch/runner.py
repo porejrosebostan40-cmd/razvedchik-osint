@@ -23,15 +23,29 @@ def _region(label):
     return ''
 
 
-def _queries(cursor=0):
+def _regional_matrix():
+    terms = ' OR '.join(f'"{x}"' for x in CORE_TERMS)
+    return [(f'{n}: {r}', t.format(region=r, terms=terms)) for r in REGIONS for n, t in REGIONAL_TEMPLATES]
+
+
+def _queries(now):
+    """Legacy time-slot query builder retained only for compatibility tests; production uses _queries_from_cursor."""
     terms = ' OR '.join(f'"{x}"' for x in CORE_TERMS)
     core = [(n, t.format(terms=terms)) for n, t in SOURCE_TEMPLATES]
-    regional = []
-    for r in REGIONS:
-        for n, t in REGIONAL_TEMPLATES:
-            regional.append((f'{n}: {r}', t.format(region=r, terms=terms)))
+    regional = _regional_matrix()
     if not regional:
-        return core, cursor, False
+        return core
+    slot = int(now.timestamp()) // 1200
+    start = (slot * BATCH_SIZE) % len(regional)
+    return core + [regional[(start + i) % len(regional)] for i in range(min(BATCH_SIZE, len(regional)))]
+
+
+def _queries_from_cursor(cursor=0):
+    terms = ' OR '.join(f'"{x}"' for x in CORE_TERMS)
+    core = [(n, t.format(terms=terms)) for n, t in SOURCE_TEMPLATES]
+    regional = _regional_matrix()
+    if not regional:
+        return core, int(cursor or 0), False
     start = int(cursor or 0) % len(regional)
     batch_len = min(BATCH_SIZE, len(regional))
     batch = [regional[(start + i) % len(regional)] for i in range(batch_len)]
@@ -186,7 +200,7 @@ def run():
     events = []
     cursor = int(store.get_meta('regional_cursor', 0) or 0)
     cycle = int(store.get_meta('regional_cycle', 0) or 0)
-    items, next_cursor, wrapped = _queries(cursor)
+    items, next_cursor, wrapped = _queries_from_cursor(cursor)
     collected = {}
     collection_failed = False
     with ThreadPoolExecutor(max_workers=MAX_WORKERS) as pool:
