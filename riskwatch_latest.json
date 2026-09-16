@@ -5,11 +5,13 @@
   "model_probability": null,
   "probability_calibration": {
     "probability": null,
-    "status": "no_evidence",
-    "sample": 0
+    "status": "insufficient_history",
+    "sample": 0,
+    "raw": 0,
+    "horizon": "24-72h"
   },
   "risk": null,
-  "model_risk": null,
+  "model_risk": 0,
   "confidence": 0,
   "analysis_provider": "not_called",
   "reason": "No valid public-source events survived retrieval/URL validation; analysis not performed",
@@ -19,64 +21,66 @@
     "независимые источники",
     "target-specific evidence"
   ],
-  "next_event": "UNKNOWN",
-  "horizon": "UNKNOWN",
+  "next_event": "root_scenario",
+  "horizon": "24-72h",
   "pattern": {
     "scenario_id": "prisoner_mobilization",
-    "pattern_stage": 0,
-    "pattern_stage_name": "baseline",
-    "observed_stages": [],
-    "next_stage": "administrative_preparation",
-    "next_event_horizon": "7-30d",
-    "independent_domains": 0,
-    "source_families": 0,
-    "regions_with_signals": 0,
+    "pattern_stage": 4,
+    "pattern_stage_name": "operational_implementation",
+    "observed_stages": [
+      "operational_implementation"
+    ],
+    "next_stage": "root_scenario",
+    "next_event_horizon": "24-72h",
+    "independent_domains": 46,
+    "source_families": 46,
+    "regions_with_signals": 4,
     "negative_indicators": 0,
-    "acceleration": 0.0,
-    "structure_score": 8,
-    "evidence_score": 0,
+    "acceleration": 1.0,
+    "structure_score": 49,
+    "evidence_score": 10,
     "evidence_metrics": {
-      "score": 0,
-      "target_events": 0,
+      "score": 10,
+      "target_events": 1,
       "action_events": 0,
-      "independent_domains": 0,
-      "source_families": 0,
-      "primary_events": 0,
+      "independent_domains": 1,
+      "source_families": 1,
+      "primary_events": 1,
       "negative_indicators": 0
     },
     "interpretation": "isolated or early-stage signals; chain not established",
     "evidence_chain": {
       "version": 2,
       "metrics": {
-        "nodes": 0,
+        "nodes": 1,
         "edges": 0,
-        "source_families": 0,
-        "primary_nodes": 0,
+        "source_families": 1,
+        "primary_nodes": 1,
         "root_nodes": 0,
         "ordered_support_edges": 0,
         "contradictions": 0,
-        "regions_with_signals": 0,
-        "chain_score": 0
+        "regions_with_signals": 1,
+        "chain_score": 21
       },
       "support_edges": [],
       "contradiction_edges": [],
-      "fingerprint": "334359b90efed75d"
+      "fingerprint": "a86942e8243771d2"
     },
     "retrieval": {
       "queries_attempted": 54,
       "queries_with_results": 10,
       "regional_queries_attempted": 30,
-      "regional_queries_with_results": 8,
-      "result_count": 49,
+      "regional_queries_with_results": 9,
+      "result_count": 40,
       "retrieval_coverage_score": 18.5,
       "coverage_is_retrieval_not_reality": true,
       "filter_counts": {
-        "raw_results": 527,
-        "after_search_url_filter": 408,
-        "after_site_filter": 49,
-        "after_dedup": 49,
-        "events_after_dedup": 48,
-        "events_total_valid": 93
+        "raw_results": 498,
+        "after_search_url_filter": 405,
+        "after_site_filter": 40,
+        "after_dedup": 40,
+        "events_after_dedup": 37,
+        "events_total_valid": 82
       }
     }
   },
@@ -91,21 +95,20 @@
   "evidence_chain": {
     "version": 2,
     "metrics": {
-      "nodes": 0,
+      "nodes": 1,
       "edges": 0,
-      "source_families": 0,
-      "primary_nodes": 0,
+      "source_families": 1,
+      "primary_nodes": 1,
       "root_nodes": 0,
       "ordered_support_edges": 0,
       "contradictions": 0,
-      "regions_with_signals": 0,
-      "chain_score": 0
+      "regions_with_signals": 1,
+      "chain_score": 21
     },
     "support_edges": [],
     "contradiction_edges": [],
-    "fingerprint": "334359b90efed75d"
+    "fingerprint": "a86942e8243771d2"
   },
-  "forecast_basis": "no evidence",
-  "analytical_status": "FAILED_NO_EVIDENCE",
-  "hallucination_guard": "not_run_no_evidence"
+  "forecast_basis": "PATTERN_ENGINE\nscenario_id=prisoner_mobilization\npattern_stage=4\npattern_stage_name=operational_implementation\nobserved_stages=['operational_implementation']\nnext_stage=root_scenario\nnext_event_horizon=24-72h\nindependent_domains=46\nsource_families=46\nregions_with_signals=4\nacceleration=1.0\nstructure_score=49\nevidence_score=10\nevidence_metrics={'score': 10, 'target_events': 1, 'action_events': 0, 'independent_domains': 1, 'source_families': 1, 'primary_events': 1, 'negative_indicators': 0}\nnegative_indicators=0\ninterpretation=isolated or early-stage signals; chain not established\nevidence_chain={'version': 2, 'metrics': {'nodes': 1, 'edges': 0, 'source_families': 1, 'primary_nodes': 1, 'root_nodes': 0, 'ordered_support_edges': 0, 'contradictions': 0, 'regions_with_signals': 1, 'chain_score': 21}, 'support_edges': [], 'contradiction_edges': [], 'fingerprint': 'a86942e8243771d2'}\nretrieval={'queries_attempted': 54, 'queries_with_results': 10, 'regional_queries_attempted': 30, 'regional_queries_with_results': 9, 'result_count': 40, 'retrieval_coverage_score': 18.5, 'coverage_is_retrieval_not_reality': True, 'filter_counts': {'raw_results': 498, 'after_search_url_filter': 405, 'after_site_filter': 40, 'after_dedup': 40, 'events_after_dedup': 37, 'events_total_valid': 82}}\nCALIBRATION={'resolved': 0, 'brier': None, 'issued_brier': None, 'brier_skill_score': None, 'issued_brier_skill_score': None, 'calibration_status': 'insufficient_history'}\nstructure_score and evidence_score are evidence-strength measures, not probabilities; root probability requires temporal historical calibration.",
+  "analytical_status": "OK"
 }
