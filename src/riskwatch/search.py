@@ -7,6 +7,7 @@ from .config import SETTINGS
 
 HEADERS={"User-Agent":"RiskWatch/1.0 (+public-source-monitoring)"}
 SEARCH_ENGINE_DOMAINS=("duckduckgo.com","bing.com","google.com","yandex.ru","yandex.com")
+DEBUG_MAX_BYTES=1_500_000
 
 class SearchResult(list):
     def __init__(self, values=(), telemetry=None):
@@ -124,9 +125,15 @@ def _write_raw_debug(source, query, html):
     if not path:
         return
     try:
-        with open(path,"w",encoding="utf-8") as f:
-            f.write("<!-- source: "+source+" -->\n<!-- query: "+query.replace("--","-")+" -->\n")
-            f.write(html[:1_500_000])
+        existing=0
+        if os.path.exists(path):
+            existing=os.path.getsize(path)
+        remaining=max(0, DEBUG_MAX_BYTES-existing)
+        if remaining <= 0:
+            return
+        payload="<!-- source: "+source+" -->\n<!-- query: "+query.replace("--","-")+" -->\n" + html[:remaining]
+        with open(path,"a",encoding="utf-8") as f:
+            f.write(payload)
     except OSError:
         pass
 
@@ -139,8 +146,7 @@ def search(query, limit=None):
     for source,url in endpoints:
         try:
             r=requests.get(url,headers=HEADERS,timeout=SETTINGS.request_timeout); r.raise_for_status()
-            if os.getenv("RISKWATCH_DEBUG_HTML") and not os.path.exists(os.getenv("RISKWATCH_DEBUG_HTML")):
-                _write_raw_debug(source,query,r.text)
+            _write_raw_debug(source,query,r.text)
             soup=BeautifulSoup(r.text,"html.parser")
             out=_extract_results(soup,source,targets,limit)
             for key,value in out.telemetry.items():
