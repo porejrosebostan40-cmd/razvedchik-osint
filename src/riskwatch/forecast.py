@@ -14,10 +14,10 @@ STAGES = {
     5: ("root_scenario", ()),
 }
 NEGATIVE_TERMS = ("опроверг", "не подтверд", "отменен", "отменён", "отказ", "не планируется", "ложн", "фейк", "исключен", "исключён")
-TARGET_TERMS = ("осужден", "осуждён", "заключен", "заключён", "исправительн", "колони", "мест лишения свободы", "фсин", "уфсин", "фку", "содержащихся")
+TARGET_TERMS = ("осужден", "осуждён", "заключен", "заключён", "заключенн", "исправительн", "колони", "мест лишения свободы", "фсин", "уфсин", "фку", "содержащихся")
 ACTION_TERMS = ("мобилиз", "привлеч", "военн", "контракт", "зачислен", "направлен", "отправлен", "призван", "служб", "отбор", "медицин", "список", "учет", "учёт", "квот", "транспорт")
 MILITARY_ANCHORS = ("мобилиз", "военн", "военком", "военнослуж", "арм", "сво", "вооружен", "вооружён", "министерств оборон", "минобороны", "вооруженные силы", "вооружённые силы")
-DIRECT_ACTION_TERMS = ("привлеч", "зачислен", "зачислён", "направлен", "отправлен", "отправл", "призван", "заключил контракт", "заключен контракт", "заключён контракт", "начал службу")
+DIRECT_ACTION_TERMS = ("привлеч", "зачислен", "зачислён", "направлен", "направл", "отправлен", "отправл", "призван", "призва", "заключил контракт", "заключен контракт", "заключён контракт", "начал службу")
 NEGATION_RE = re.compile(r"\bне\s+(?:будут|будет|стал|стали|станут|привлеч|зачислен|зачислён|направлен|отправлен|призван|мобилиз)")
 PRIMARY_DOMAINS = ("kremlin.ru", "government.ru", "mil.ru", "fsin.gov.ru", "publication.pravo.gov.ru", "minjust.gov.ru", "duma.gov.ru", "zakupki.gov.ru", "gov.ru")
 SEARCH_ENGINES = ("duckduckgo.com", "bing.com", "google.com", "yandex.ru", "yandex.com")
@@ -79,8 +79,6 @@ def _stage(e):
         score = sum(1 for term in terms if term in text)
         if not score:
             continue
-        # Administrative and operational target-specific stages require a target.
-        # Logistics may be generic because its target linkage can come from earlier events.
         if n in (2, 4) and not target:
             continue
         hits.append((score, n))
@@ -183,74 +181,3 @@ def _root_outcome(events, start_ts=None, end_ts=None):
         if _root_event(e):
             return True
     return False
-
-
-def resolve_forecasts(records, events, now=None):
-    now = float(now if now is not None else datetime.now(timezone.utc).timestamp())
-    out = []
-    for rec in records:
-        if rec.get("resolved") or now < float(rec.get("deadline_ts", 0)):
-            out.append(rec)
-            continue
-        start = float(rec.get("created_ts", 0))
-        deadline = float(rec.get("deadline_ts", now))
-        outcome = 1 if _root_outcome(events, start_ts=start, end_ts=deadline) else 0
-        rec = dict(rec)
-        raw = rec.get("raw_probability", rec.get("probability", 0))
-        issued = rec.get("issued_probability", raw)
-        rec.update({"resolved": True, "outcome": outcome, "resolved_ts": now, "brier": _brier(raw, outcome), "issued_brier": _brier(issued, outcome)})
-        out.append(rec)
-    return out
-
-
-def _brier(probability, outcome):
-    return round((max(0, min(1, float(probability) / 100)) - float(outcome)) ** 2, 6)
-
-
-def _resolved(records):
-    return [r for r in records if r.get("resolved") and r.get("outcome") is not None and r.get("scenario_id", SCENARIO_ID) == SCENARIO_ID]
-
-
-def calibrate_probability(raw_probability, records, horizon=None):
-    done = _resolved(records)
-    if horizon:
-        horizon_done = [r for r in done if r.get("horizon") == horizon]
-        if len(horizon_done) >= 30:
-            done = horizon_done
-    n = len(done)
-    raw = max(0, min(100, int(raw_probability)))
-    if n < 30:
-        return {"probability": None, "status": "insufficient_history", "sample": n, "raw": raw, "horizon": horizon}
-    bucket = min(9, raw // 10)
-    prior = [r for r in done if min(9, int(r.get("raw_probability", r.get("probability", 0))) // 10) == bucket]
-    if len(prior) < 5:
-        return {"probability": None, "status": "insufficient_bin_history", "sample": n, "bin_sample": len(prior), "raw": raw, "horizon": horizon}
-    rate = (sum(int(r.get("outcome", 0)) for r in prior) + 1) / (len(prior) + 2)
-    return {"probability": round(rate * 100, 1), "status": "preliminary" if n < 100 else "measured", "sample": n, "bin_sample": len(prior), "raw": raw, "horizon": horizon}
-
-
-def calibration_summary(records):
-    done = _resolved(records)
-    if not done:
-        return {"resolved": 0, "brier": None, "issued_brier": None, "brier_skill_score": None, "issued_brier_skill_score": None, "calibration_status": "insufficient_history"}
-    raw_brier = round(sum(float(r.get("brier", _brier(r.get("raw_probability", r.get("probability", 0)), r.get("outcome", 0)))) for r in done) / len(done), 6)
-    issued_brier = round(sum(float(r.get("issued_brier", _brier(r.get("issued_probability", r.get("raw_probability", 0)), r.get("outcome", 0)))) for r in done) / len(done), 6)
-    base = sum(float(r.get("outcome", 0)) for r in done) / len(done)
-    baseline = base * (1 - base)
-    raw_skill = round(1 - raw_brier / baseline, 6) if baseline else None
-    issued_skill = round(1 - issued_brier / baseline, 6) if baseline else None
-    bins = defaultdict(list)
-    for r in done:
-        p = r.get("issued_probability", r.get("raw_probability", r.get("probability", 0)))
-        bins[min(9, int(float(p)) // 10)].append(r.get("outcome", 0))
-    cal = [{"range": f"{b*10}-{b*10+9}", "n": len(v), "empirical_rate": round(sum(v) / len(v) * 100, 1)} for b, v in sorted(bins.items())]
-    n = len(done)
-    status = "insufficient_history" if n < 30 else ("preliminary" if n < 100 else "measured")
-    return {"resolved": n, "base_rate": round(base * 100, 2), "brier": raw_brier, "issued_brier": issued_brier, "brier_skill_score": raw_skill, "issued_brier_skill_score": issued_skill, "calibration": cal, "calibration_status": status}
-
-
-def render_context(forecast, calibration=None):
-    text = "PATTERN_ENGINE\n" + "\n".join(f"{k}={v}" for k, v in forecast.items() if not k.startswith("_"))
-    if calibration:
-        text += "\nCALIBRATION=" + str(calibration)
-    return text + "\nstructure_score and evidence_score are evidence-strength measures, not probabilities; root probability requires temporal historical calibration."
