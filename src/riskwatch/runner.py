@@ -10,6 +10,8 @@ from .forecast import build_forecast, forecast_record, calibration_summary, cali
 from .evidence import build_evidence_graph, compact_chain
 from .semantics import safe_root_event
 
+# live retrieval diagnostic trigger
+
 BATCH_SIZE = 30
 MAX_WORKERS = 8
 SCENARIO_ID = 'prisoner_mobilization'
