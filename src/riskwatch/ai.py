@@ -89,7 +89,7 @@ def _validate(result,events,forecast=None):
     raw_verdict=result.get('verdict', result.get('scenario_answer')) if isinstance(result,dict) else None
     if not isinstance(raw_verdict,str): return _fallback(events,'AI response missing verdict; rejected',forecast)
     verdict=raw_verdict.strip().lower()
-    if verdict in ('undetermined','unknown'):
+    if verdict in ('undetermined','unknown','indeterminate'):
         raw_facts=result.get('facts',[]); raw_inf=result.get('inferences',[])
         if (isinstance(raw_facts,list) and raw_facts) or (isinstance(raw_inf,list) and raw_inf):
             return _fallback(events,'AI undetermined response contained claims; rejected',forecast)
