@@ -61,6 +61,23 @@
       "support_edges": [],
       "contradiction_edges": [],
       "fingerprint": "334359b90efed75d"
+    },
+    "retrieval": {
+      "queries_attempted": 54,
+      "queries_with_results": 10,
+      "regional_queries_attempted": 30,
+      "regional_queries_with_results": 8,
+      "result_count": 49,
+      "retrieval_coverage_score": 18.5,
+      "coverage_is_retrieval_not_reality": true,
+      "filter_counts": {
+        "raw_results": 527,
+        "after_search_url_filter": 408,
+        "after_site_filter": 49,
+        "after_dedup": 49,
+        "events_after_dedup": 48,
+        "events_total_valid": 93
+      }
     }
   },
   "calibration": {
@@ -88,5 +105,7 @@
     "contradiction_edges": [],
     "fingerprint": "334359b90efed75d"
   },
-  "forecast_basis": "no evidence"
+  "forecast_basis": "no evidence",
+  "analytical_status": "FAILED_NO_EVIDENCE",
+  "hallucination_guard": "not_run_no_evidence"
 }
