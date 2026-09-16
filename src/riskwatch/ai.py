@@ -1,15 +1,13 @@
 import hashlib, json, re, requests
+from pathlib import Path
 from urllib.parse import urlsplit
 from .config import SETTINGS
-from .forecast import build_forecast, _source_family, TARGET_TERMS, ACTION_TERMS
+from .forecast import _source_family, TARGET_TERMS, ACTION_TERMS
 from .semantics import safe_root_event, has_target, is_negative
 
 SCENARIO_ID='prisoner_mobilization'
 SCENARIO_QUESTION='Будут ли мужчин из мест лишения свободы, прежде всего из исправительных колоний, мобилизовывать/привлекать к военной службе после 20 сентября 2026 года?'
-SYSTEM='''Ты аналитическое ядро RiskWatch. Не являйся источником фактов: работай только с переданными events и deterministic evidence_chain.
-Главный вопрос неизменен: будут ли мужчин из мест лишения свободы, прежде всего из исправительных колоний, мобилизовывать/привлекать к военной службе после 20 сентября 2026 года?
-Rules include the root scenario requirement: 7) Для YES нужен target-specific root signal либо согласованная цепочка, ведущая к root scenario. 8) Для NO нужна явная отрицательная evidence; отсутствие новости само по себе не является доказательством NO. 9) Верни только JSON.
-'''
+SYSTEM='''Ты аналитическое ядро RiskWatch. Не являйся источником фактов: работай только с переданными events и deterministic evidence_chain.\nГлавный вопрос неизменен: будут ли мужчин из мест лишения свободы, прежде всего из исправительных колоний, мобилизовывать/привлекать к военной службе после 20 сентября 2026 года?\nRules include the root scenario requirement: 7) Для YES нужен target-specific root signal либо согласованная цепочка, ведущая к root scenario. 8) Для NO нужна явная отрицательная evidence; отсутствие новости само по себе не является доказательством NO. 9) Верни только JSON.\n'''
 PRIMARY_DOMAINS=('kremlin.ru','government.ru','mil.ru','fsin.gov.ru','minjust.gov.ru','duma.gov.ru','council.gov.ru','publication.pravo.gov.ru','zakupki.gov.ru','gov.ru','epp.genproc.gov.ru')
 NEGATIVE_TERMS=('опроверг','не подтверд','отменен','отменён','отказ','не планируется','ложн','фейк','исключен','исключён')
 
@@ -19,9 +17,11 @@ def _domain(url):
     except ValueError:return ''
 def _is_primary(url):
     d=_domain(url); return any(d==x or d.endswith('.'+x) for x in PRIMARY_DOMAINS)
-def _fallback(events,reason,forecast=None):
-    forecast=forecast or build_forecast(events)
-    return {'scenario_id':SCENARIO_ID,'scenario_question':SCENARIO_QUESTION,'probability':0,'confidence':0,'risk':0,'decision':'WATCH','reason':reason,'facts':[],'inferences':[],'evidence_event_ids':[],'signals':[f"pattern_stage={forecast.get('pattern_stage',0)}",f"structure_score={forecast.get('structure_score',0)}"],'missing_indicators':['прямое решение о мобилизации/привлечении мужчин из ИК','независимые де-факто подтверждения подготовительных действий','наблюдаемый следующий этап цепочки'],'next_event':'UNKNOWN','horizon':'UNKNOWN','forecast_basis':'insufficient evidence','scenario_answer':'UNKNOWN','pattern':forecast,'hallucination_guard':'fallback_no_claim_without_evidence','analysis_provider':'fallback'}
+def _fallback(events,reason,forecast=None,usage=None):
+    forecast=forecast or {}
+    result={'scenario_id':SCENARIO_ID,'scenario_question':SCENARIO_QUESTION,'probability':0,'confidence':0,'risk':0,'decision':'WATCH','reason':reason,'facts':[],'inferences':[],'evidence_event_ids':[],'signals':[f"pattern_stage={forecast.get('pattern_stage',0)}",f"structure_score={forecast.get('structure_score',0)}"],'missing_indicators':['прямое решение о мобилизации/привлечении мужчин из ИК','независимые де-факто подтверждения подготовительных действий','наблюдаемый следующий этап цепочки'],'next_event':'UNKNOWN','horizon':'UNKNOWN','forecast_basis':'insufficient evidence','scenario_answer':'UNKNOWN','pattern':forecast,'hallucination_guard':'fallback_no_claim_without_evidence','analysis_provider':'fallback'}
+    if usage is not None: result['usage']=usage
+    return result
 def _extract_json(text):
     if not isinstance(text,str):raise ValueError('empty model output')
     text=text.strip(); text=re.sub(r'^```(?:json)?\s*|\s*```$','',text,flags=re.I|re.S).strip()
@@ -85,7 +85,7 @@ def _validate_claim(claim,allowed):
     if not any(_has_target(e) and _has_action(e) for e in linked):return None
     return {'text':claim['text'].strip()[:600],'event_ids':ids}
 def _validate(result,events,forecast=None):
-    forecast=forecast or build_forecast(events); allowed={_eid(e):e for e in events}; facts=[]; inf=[]
+    forecast=forecast or {}; allowed={_eid(e):e for e in events}; facts=[]; inf=[]
     for x in result.get('facts',[]) if isinstance(result.get('facts'),list) else []:
         y=_validate_claim(x,allowed)
         if y:facts.append(y)
@@ -111,20 +111,29 @@ def _validate(result,events,forecast=None):
     if answer=='NO' and not any(_has_negative(e) for e in linked_events):answer='UNKNOWN'
     if c>p:c=p
     result.update({'scenario_id':SCENARIO_ID,'scenario_question':SCENARIO_QUESTION,'scenario_answer':answer,'probability':p,'confidence':c,'risk':min(r,p),'facts':facts,'inferences':inf,'evidence_event_ids':used,'missing_indicators':result.get('missing_indicators',[]) if isinstance(result.get('missing_indicators',[]),list) else [],'next_event':str(result.get('next_event','UNKNOWN'))[:500] or 'UNKNOWN','horizon':str(result.get('horizon','UNKNOWN'))[:100] or 'UNKNOWN','forecast_basis':str(result.get('forecast_basis',''))[:900],'pattern':forecast,'hallucination_guard':'passed_evidence_gate_v2','evidence_quality':'corroborated_primary' if corroborated and primary else ('corroborated' if corroborated else 'single_source_or_nonindependent'),'evidence_domains':sorted(domains),'evidence_families':len(effective_families),'evidence_origins':len(origins)}); return result
-def analyze(events):
-    forecast=build_forecast(events)
+def _save_ai_debug(response_data):
     try:
-        from .evidence import build_evidence_graph, compact_chain
-        forecast['evidence_chain']=compact_chain(build_evidence_graph(events))
+        raw=json.dumps(response_data,ensure_ascii=False,separators=(',',':'))
+        raw=raw[:180000]
+        Path('/tmp/riskwatch_ai_debug.json').write_text(raw,encoding='utf-8')
+    except Exception:
+        pass
+def analyze(events,forecast,evidence_graph=None):
+    forecast=dict(forecast or {})
+    try:
+        from .evidence import compact_chain
+        forecast['evidence_chain']=compact_chain(evidence_graph or {})
     except Exception as e:
         forecast['evidence_chain']={'version':2,'metrics':{},'support_edges':[],'contradiction_edges':[],'fingerprint':'','error':type(e).__name__}
     if not SETTINGS.openai_api_key:return _fallback(events,'OPENAI_API_KEY is not configured',forecast)
     compact=_compact_events(events); context={'scenario_id':SCENARIO_ID,'scenario_question':SCENARIO_QUESTION,'pattern':{k:v for k,v in forecast.items() if k!='_events'},'evidence_chain':forecast.get('evidence_chain',{}),'events':compact}
     payload={'model':SETTINGS.openai_model,'instructions':SYSTEM,'input':'Return only JSON. Analyze only the evidence below. '+json.dumps(context,ensure_ascii=False,separators=(',',':')),'text':{'format':{'type':'json_object'}},'max_output_tokens':500,'store':False}
     try:
-        r=requests.post('https://api.openai.com/v1/responses',headers={'Authorization':f'Bearer {SETTINGS.openai_api_key}','Content-Type':'application/json'},json=payload,timeout=60); r.raise_for_status(); result=_extract_json(_response_text(r.json()))
+        r=requests.post('https://api.openai.com/v1/responses',headers={'Authorization':f'Bearer {SETTINGS.openai_api_key}','Content-Type':'application/json'},json=payload,timeout=60); r.raise_for_status(); response=r.json(); usage=response.get('usage',{}) or {}; result=_extract_json(_response_text(response))
         if not isinstance(result,dict):raise ValueError('model JSON is not object')
-        result.setdefault('decision','WATCH'); result.setdefault('reason','OpenAI analysis completed'); return _validate(result,events,forecast)
+        result.setdefault('decision','WATCH'); result.setdefault('reason','OpenAI analysis completed'); validated=_validate(result,events,forecast); validated['usage']=usage
+        if validated.get('reason')=='AI claims failed semantic evidence gate; rejected': _save_ai_debug(response)
+        return validated
     except requests.HTTPError as e:
         body=''
         try:body=e.response.text[:300]

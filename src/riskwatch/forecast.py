@@ -67,11 +67,17 @@ def _root_event(e):
     return _has_direct_military_action(e)
 
 
-def _stage(e):
+def _has_target_action(events):
+    return any(_has_target(e) and any(term in _text(e) for term in ACTION_TERMS) and not _is_negative(e) for e in events)
+
+
+def _stage(e, context=None):
     text = _text(e)
     if _root_event(e):
         return 5
     target = _has_target(e)
+    has_action = any(term in text for term in ACTION_TERMS)
+    context_target_action = _has_target_action(context or [e])
     hits = []
     for n, (_, terms) in STAGES.items():
         if n == 5:
@@ -79,7 +85,11 @@ def _stage(e):
         score = sum(1 for term in terms if term in text)
         if not score:
             continue
-        if n in (2, 4) and not target:
+        if n == 2 and not target:
+            continue
+        if n in (3, 4) and not context_target_action:
+            continue
+        if n == 4 and (not target or not has_action):
             continue
         hits.append((score, n))
     return max(hits)[1] if hits else 0
@@ -125,7 +135,7 @@ def evidence_score(events):
 
 def build_forecast(events):
     events = list(events or [])
-    active = sorted({s for s in (_stage(e) for e in events) if s > 0})
+    active = sorted({s for s in (_stage(e, events) for e in events) if s > 0})
     max_stage = max(active, default=0)
     families = {_source_family(e) for e in events if _source_family(e) and _source_family(e) not in SEARCH_ENGINES}
     regions = {str(e.get("region", "")).strip() for e in events if str(e.get("region", "")).strip()}

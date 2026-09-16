@@ -82,7 +82,7 @@ def _throttled_decision(store):
     return None
 
 
-def _no_evidence_decision(pattern, chain):
+def _no_evidence_decision(pattern, chain, signals):
     return {
         'scenario_id': SCENARIO_ID,
         'scenario_question': SCENARIO_QUESTION,
@@ -97,7 +97,7 @@ def _no_evidence_decision(pattern, chain):
         'facts': [],
         'inferences': [],
         'evidence_event_ids': [],
-        'signals': [],
+        'signals': signals,
         'missing_indicators': ['валидные результаты публичного поиска', 'независимые источники', 'target-specific evidence'],
         'next_event': 'UNKNOWN',
         'horizon': 'UNKNOWN',
@@ -236,16 +236,10 @@ def run():
     pattern['retrieval']['regional_cycle'] = int(store.get_meta('regional_cycle', 0) or 0)
     pattern['retrieval']['regional_batch_wrapped'] = wrapped
     pattern['retrieval']['regional_collection_failed'] = collection_failed
+    signals = [f"pattern_stage={pattern.get('pattern_stage',0)}", f"structure_score={pattern.get('structure_score',0)}"]
 
     if not all_events or not graph.get('nodes'):
-        pattern = build_forecast([])
-        pattern['evidence_chain'] = chain
-        pattern['retrieval'] = _retrieval_telemetry(items, collected, new_events, previous_total)
-        pattern['retrieval']['regional_cursor'] = int(store.get_meta('regional_cursor', 0) or 0)
-        pattern['retrieval']['regional_cycle'] = int(store.get_meta('regional_cycle', 0) or 0)
-        pattern['retrieval']['regional_batch_wrapped'] = wrapped
-        pattern['retrieval']['regional_collection_failed'] = collection_failed
-        decision = _no_evidence_decision(pattern, chain)
+        decision = _no_evidence_decision(pattern, chain, signals)
         decision['calibration'] = calibration_summary(resolved)
         decision['probability_calibration'] = {'probability': None, 'status': 'no_evidence', 'sample': len([r for r in resolved if r.get('resolved')])}
         store.save_decision(decision)
@@ -254,11 +248,11 @@ def run():
     calibration = calibration_summary(resolved)
     if store.ai_due():
         store.mark_ai_attempt()
-        decision = analyze(all_events)
+        decision = analyze(scenario_events, pattern, graph)
     else:
         decision = _throttled_decision(store)
         if decision is None:
-            decision = analyze(all_events)
+            decision = analyze(scenario_events, pattern, graph)
 
     raw_model_probability = decision.get('probability')
     model_probability = int(raw_model_probability) if isinstance(raw_model_probability, (int, float)) else 0
@@ -274,6 +268,7 @@ def run():
     decision['model_risk'] = int(decision.get('risk', 0)) if decision.get('risk') is not None else 0
     decision['risk'] = round(issued_probability) if calibrated else None
     decision['pattern'] = pattern
+    decision['signals'] = signals
     decision['calibration'] = calibration
     decision['evidence_chain'] = chain
     decision['scenario_question'] = SCENARIO_QUESTION
