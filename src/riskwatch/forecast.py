@@ -31,7 +31,6 @@ def _domain(url):
 
 
 def _source_family(e):
-    """Publisher family; search engines never count as independent evidence."""
     domain = _domain(e.get("url", ""))
     if not domain:
         return ""
@@ -47,8 +46,7 @@ def _text(e):
 
 
 def _has_target(e):
-    text = _text(e)
-    return any(term in text for term in TARGET_TERMS)
+    return any(term in _text(e) for term in TARGET_TERMS)
 
 
 def _is_negative(e):
@@ -57,8 +55,7 @@ def _is_negative(e):
 
 
 def _has_military_anchor(e):
-    text = _text(e)
-    return any(term in text for term in MILITARY_ANCHORS)
+    return any(term in _text(e) for term in MILITARY_ANCHORS)
 
 
 def _has_direct_military_action(e):
@@ -67,7 +64,6 @@ def _has_direct_military_action(e):
 
 
 def _root_event(e):
-    """Strict root event: target-specific military action, not generic prison news."""
     return _has_direct_military_action(e)
 
 
@@ -81,12 +77,13 @@ def _stage(e):
         if n == 5:
             continue
         score = sum(1 for term in terms if term in text)
-        if score:
-            # Administrative/organizational signals only become scenario-relevant
-            # when they mention the target population; generic military news does not.
-            if n >= 2 and not target:
-                continue
-            hits.append((score, n))
+        if not score:
+            continue
+        # Administrative and operational target-specific stages require a target.
+        # Logistics may be generic because its target linkage can come from earlier events.
+        if n in (2, 4) and not target:
+            continue
+        hits.append((score, n))
     return max(hits)[1] if hits else 0
 
 
@@ -177,7 +174,6 @@ def forecast_record(forecast, probability, now=None, evidence_ids=None, calibrat
 def _root_outcome(events, start_ts=None, end_ts=None):
     for e in events:
         ts = _timestamp(e)
-        # An undated event cannot resolve a time-bounded forecast.
         if not ts:
             continue
         if start_ts is not None and ts < start_ts:
