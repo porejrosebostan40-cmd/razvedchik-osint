@@ -14,7 +14,7 @@
   "model_risk": 0,
   "confidence": 0,
   "analysis_provider": "fallback",
-  "reason": "OpenAI HTTP failure: 429 {\n  \"error\": {\n    \"message\": \"Rate limit reached for gpt-5.6-luna in organization org-MYHgoY7mWZFMbaJpA0Uo7t70 on tokens per min (TPM): Limit 100000, Used 98564, Requested 2900. Please try again in 10h32m26.88s. Visit https://platform.openai.com/account/rate-limits to learn more. You can increase y",
+  "reason": "OpenAI HTTP failure: 429 {\n  \"error\": {\n    \"message\": \"Rate limit reached for gpt-5.6-luna in organization org-MYHgoY7mWZFMbaJpA0Uo7t70 on tokens per min (TPM): Limit 100000, Used 98245, Requested 2900. Please try again in 8h14m38.4s. Visit https://platform.openai.com/account/rate-limits to learn more. You can increase you",
   "signals": [
     "pattern_stage=4",
     "structure_score=28"
