@@ -6,7 +6,7 @@ from .config import SETTINGS, REGIONS, SOURCE_TEMPLATES, REGIONAL_TEMPLATES, COR
 from .search import search
 from .store import Store
 from .ai import analyze
-from .forecast import build_forecast, forecast_record, calibration_summary, calibrate_probability, render_context, _stage, _root_event, _timestamp, _brier
+from .forecast import build_forecast, forecast_record, calibration_summary, calibrate_probability, render_context, _stage, _timestamp, _brier
 from .evidence import build_evidence_graph, compact_chain
 from .semantics import safe_root_event
 
@@ -63,6 +63,34 @@ def _throttled_decision(store):
     return None
 
 
+def _no_evidence_decision(pattern, chain):
+    return {
+        'scenario_id': SCENARIO_ID,
+        'scenario_question': SCENARIO_QUESTION,
+        'scenario_answer': 'UNKNOWN',
+        'probability': None,
+        'model_probability': None,
+        'confidence': 0,
+        'risk': None,
+        'model_risk': None,
+        'decision': 'WATCH',
+        'reason': 'No valid public-source events survived retrieval/URL validation; analysis not performed',
+        'facts': [],
+        'inferences': [],
+        'evidence_event_ids': [],
+        'signals': [],
+        'missing_indicators': ['валидные результаты публичного поиска', 'независимые источники', 'target-specific evidence'],
+        'next_event': 'UNKNOWN',
+        'horizon': 'UNKNOWN',
+        'forecast_basis': 'no evidence',
+        'analysis_provider': 'not_called',
+        'hallucination_guard': 'not_run_no_evidence',
+        'pattern': pattern,
+        'evidence_chain': chain,
+        'analytical_status': 'FAILED_NO_EVIDENCE',
+    }
+
+
 def telegram(text):
     if not SETTINGS.telegram_token or not SETTINGS.telegram_chat_id:
         return
@@ -86,7 +114,6 @@ def _episode_duplicate(store, forecast, evidence_ids):
 
 
 def _root_outcome(events, start_ts, end_ts):
-    """Resolve only on a conservative target-specific military root event with known time."""
     for e in events:
         ts = _timestamp(e)
         if not ts:
@@ -157,6 +184,19 @@ def run():
     chain = compact_chain(graph)
     pattern['evidence_chain'] = chain
     pattern['retrieval'] = _retrieval_telemetry(items, collected)
+
+    # Hard invariant: an empty evidence graph cannot produce a non-baseline forecast.
+    # This prevents stale/phantom stages from contaminating calibration.
+    if not all_events or not graph.get('nodes'):
+        pattern = build_forecast([])
+        pattern['evidence_chain'] = chain
+        pattern['retrieval'] = _retrieval_telemetry(items, collected)
+        decision = _no_evidence_decision(pattern, chain)
+        decision['calibration'] = calibration_summary(resolved)
+        decision['probability_calibration'] = {'probability': None, 'status': 'no_evidence', 'sample': len([r for r in resolved if r.get('resolved')])}
+        store.save_decision(decision)
+        return decision
+
     calibration = calibration_summary(resolved)
     if store.ai_due():
         store.mark_ai_attempt()
@@ -185,6 +225,7 @@ def run():
     decision['next_event'] = pattern.get('next_stage', 'UNKNOWN')
     decision['horizon'] = horizon or 'UNKNOWN'
     decision['forecast_basis'] = render_context(pattern, calibration)
+    decision['analytical_status'] = 'FAILED_AI' if decision.get('analysis_provider') == 'fallback' else 'OK'
 
     evidence_ids = _evidence_ids(all_events)
     if not _episode_duplicate(store, pattern, evidence_ids):
