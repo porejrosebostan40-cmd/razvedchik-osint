@@ -55,8 +55,8 @@ class Store:
     def ai_due(self, now=None):
         return (now or time.time()) - float(self.data.get("last_ai_ts",0)) >= AI_INTERVAL_SECONDS
 
-    def mark_ai_attempt(self, now=None):
-        self.data["last_ai_ts"]=now or time.time()
+    def reserve_ai_attempt(self, now=None):
+        self.data["last_ai_ts"] = now or time.time()
         self._save()
 
     def last_decision(self):

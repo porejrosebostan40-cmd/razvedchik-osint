@@ -1,3 +1,4 @@
+import os
 import hashlib
 import requests
 from concurrent.futures import ThreadPoolExecutor, as_completed
@@ -73,13 +74,33 @@ def _throttled_decision(store):
     previous = store.last_decision()
     if previous:
         return {k: previous.get(k, v) for k, v in {
-            'probability': 0, 'confidence': 0, 'risk': 0, 'decision': 'WATCH',
+            'probability': None, 'confidence': 0, 'risk': None, 'decision': 'WATCH',
             'reason': 'AI call throttled; previous decision reused', 'signals': [],
             'missing_indicators': [], 'next_event': 'UNKNOWN', 'horizon': 'UNKNOWN',
             'forecast_basis': '', 'pattern': {}, 'scenario_answer': 'UNKNOWN',
             'analysis_provider': 'cached'
         }.items()}
-    return None
+    return {
+        'scenario_id': SCENARIO_ID,
+        'scenario_question': SCENARIO_QUESTION,
+        'scenario_answer': 'UNKNOWN',
+        'probability': None,
+        'model_probability': None,
+        'confidence': 0,
+        'risk': None,
+        'model_risk': None,
+        'decision': 'WATCH',
+        'reason': 'AI call throttled; no reservation acquired',
+        'signals': [],
+        'missing_indicators': [],
+        'next_event': 'UNKNOWN',
+        'horizon': 'UNKNOWN',
+        'forecast_basis': '',
+        'analysis_provider': 'not_called',
+        'pattern': {},
+        'evidence_chain': {},
+        'analytical_status': 'NOT_ATTEMPTED',
+    }
 
 
 def _no_evidence_decision(pattern, chain, signals):
@@ -246,13 +267,10 @@ def run():
         return decision
 
     calibration = calibration_summary(resolved)
-    if store.ai_due():
-        store.mark_ai_attempt()
+    if os.getenv("RESERVATION_OK", "").lower() == "true":
         decision = analyze(scenario_events, pattern, graph)
     else:
         decision = _throttled_decision(store)
-        if decision is None:
-            decision = analyze(scenario_events, pattern, graph)
 
     raw_model_probability = decision.get('probability')
     model_probability = int(raw_model_probability) if isinstance(raw_model_probability, (int, float)) else 0

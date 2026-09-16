@@ -5,7 +5,7 @@ on:
     - cron: '0 */6 * * *'
 concurrency:
   group: riskwatch-main
-  cancel-in-progress: false
+  cancel-in-progress: true
 permissions:
   contents: write
 jobs:
@@ -21,6 +21,41 @@ jobs:
           python-version: '3.12'
       - name: Install
         run: python -m pip install --upgrade pip && pip install .
+      - name: Sync main before reservation
+        shell: bash
+        run: |
+          set -euo pipefail
+          git fetch origin main
+          git reset --hard origin/main
+      - name: Prepare AI reservation
+        env:
+          RISKWATCH_STATE: riskwatch_state.json
+        run: python -m riskwatch.reserve
+      - name: Commit AI reservation
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name 'riskwatch-bot'
+          git config user.email 'riskwatch-bot@users.noreply.github.com'
+          if git diff --quiet -- riskwatch_state.json; then
+            echo 'AI reservation not needed'
+            exit 0
+          fi
+          git add riskwatch_state.json
+          git commit -m 'chore: reserve riskwatch AI attempt'
+          set +e
+          git push origin main
+          PUSH_STATUS=$?
+          set -e
+          if [ "$PUSH_STATUS" -eq 0 ]; then
+            echo 'RESERVATION_OK=true' >> "$GITHUB_ENV"
+            echo 'AI reservation acquired'
+            exit 0
+          fi
+          echo 'Reservation rejected: another run updated main'
+          git fetch origin main
+          git reset --hard origin/main
+          exit 0
       - name: Validate OpenAI secret presence
         env:
           OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
