@@ -47,10 +47,13 @@ def _queries_from_cursor(cursor=0):
     if not regional:
         return core, int(cursor or 0), False
     start = int(cursor or 0) % len(regional)
-    batch_len = min(BATCH_SIZE, len(regional))
-    batch = [regional[(start + i) % len(regional)] for i in range(batch_len)]
-    next_cursor = (start + batch_len) % len(regional)
-    wrapped = next_cursor < start
+    remaining = len(regional) - start
+    batch_len = min(BATCH_SIZE, remaining)
+    batch = regional[start:start + batch_len]
+    next_cursor = start + batch_len
+    wrapped = next_cursor == len(regional)
+    if wrapped:
+        next_cursor = 0
     return core + batch, next_cursor, wrapped
 
 
