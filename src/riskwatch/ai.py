@@ -86,6 +86,17 @@ def _validate_claim(claim,allowed):
     return {'text':claim['text'].strip()[:600],'event_ids':ids}
 def _validate(result,events,forecast=None):
     forecast=forecast or {}; allowed={_eid(e):e for e in events}; facts=[]; inf=[]
+    raw_verdict=result.get('verdict', result.get('scenario_answer')) if isinstance(result,dict) else None
+    if not isinstance(raw_verdict,str): return _fallback(events,'AI response missing verdict; rejected',forecast)
+    verdict=raw_verdict.strip().lower()
+    if verdict in ('undetermined','unknown'):
+        raw_facts=result.get('facts',[]); raw_inf=result.get('inferences',[])
+        if (isinstance(raw_facts,list) and raw_facts) or (isinstance(raw_inf,list) and raw_inf):
+            return _fallback(events,'AI undetermined response contained claims; rejected',forecast)
+        result.update({'scenario_id':SCENARIO_ID,'scenario_question':SCENARIO_QUESTION,'scenario_answer':'UNKNOWN','probability':None,'confidence':0,'risk':None,'facts':[],'inferences':[],'evidence_event_ids':[],'missing_indicators':result.get('missing_indicators',[]) if isinstance(result.get('missing_indicators',[]),list) else [],'next_event':str(result.get('next_event','UNKNOWN'))[:500] or 'UNKNOWN','horizon':str(result.get('horizon','UNKNOWN'))[:100] or 'UNKNOWN','forecast_basis':str(result.get('forecast_basis',''))[:900],'pattern':forecast,'hallucination_guard':'passed_evidence_gate_valid_unknown','evidence_quality':'none_required_valid_unknown','evidence_domains':[],'evidence_families':0,'evidence_origins':0,'analysis_provider':'openai'})
+        return result
+    if verdict not in ('yes','no'):
+        return _fallback(events,f'AI response has invalid verdict: {raw_verdict!r}',forecast)
     for x in result.get('facts',[]) if isinstance(result.get('facts'),list) else []:
         y=_validate_claim(x,allowed)
         if y:facts.append(y)
@@ -104,13 +115,12 @@ def _validate(result,events,forecast=None):
     structure=int(forecast.get('structure_score',0)); stage=int(forecast.get('pattern_stage',0))
     if stage<2 and structure<40:p,c=min(p,60),min(c,50)
     if structure<70:p=min(p,max(55,structure+15))
-    answer=str(result.get('scenario_answer','UNKNOWN')).upper()
-    if answer not in ('YES','NO','UNKNOWN'):answer='UNKNOWN'
+    answer='YES' if verdict=='yes' else 'NO'
     linked_events=[allowed[i] for i in used]
     if answer=='YES' and not any(_has_root(e) for e in linked_events):answer='UNKNOWN'
     if answer=='NO' and not any(_has_negative(e) for e in linked_events):answer='UNKNOWN'
     if c>p:c=p
-    result.update({'scenario_id':SCENARIO_ID,'scenario_question':SCENARIO_QUESTION,'scenario_answer':answer,'probability':p,'confidence':c,'risk':min(r,p),'facts':facts,'inferences':inf,'evidence_event_ids':used,'missing_indicators':result.get('missing_indicators',[]) if isinstance(result.get('missing_indicators',[]),list) else [],'next_event':str(result.get('next_event','UNKNOWN'))[:500] or 'UNKNOWN','horizon':str(result.get('horizon','UNKNOWN'))[:100] or 'UNKNOWN','forecast_basis':str(result.get('forecast_basis',''))[:900],'pattern':forecast,'hallucination_guard':'passed_evidence_gate_v2','evidence_quality':'corroborated_primary' if corroborated and primary else ('corroborated' if corroborated else 'single_source_or_nonindependent'),'evidence_domains':sorted(domains),'evidence_families':len(effective_families),'evidence_origins':len(origins)}); return result
+    result.update({'scenario_id':SCENARIO_ID,'scenario_question':SCENARIO_QUESTION,'scenario_answer':answer,'probability':p,'confidence':c,'risk':min(r,p),'facts':facts,'inferences':inf,'evidence_event_ids':used,'missing_indicators':result.get('missing_indicators',[]) if isinstance(result.get('missing_indicators',[]),list) else [],'next_event':str(result.get('next_event','UNKNOWN'))[:500] or 'UNKNOWN','horizon':str(result.get('horizon','UNKNOWN'))[:100] or 'UNKNOWN','forecast_basis':str(result.get('forecast_basis',''))[:900],'pattern':forecast,'hallucination_guard':'passed_evidence_gate_v2','evidence_quality':'corroborated_primary' if corroborated and primary else ('corroborated' if corroborated else 'single_source_or_nonindependent'),'evidence_domains':sorted(domains),'evidence_families':len(effective_families),'evidence_origins':len(origins),'analysis_provider':'openai'}); return result
 def _save_ai_debug(response_data):
     try:
         raw=json.dumps(response_data,ensure_ascii=False,separators=(',',':'))
