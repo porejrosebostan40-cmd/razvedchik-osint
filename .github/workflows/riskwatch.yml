@@ -1,9 +1,6 @@
 name: RiskWatch
 on:
   workflow_dispatch:
-  push:
-    paths:
-      - 'src/riskwatch/**'
   schedule:
     - cron: '7,27,47 * * * *'
 concurrency:
@@ -123,4 +120,3 @@ jobs:
           name: riskwatch-search-debug
           path: /tmp/riskwatch_search_debug.html
           if-no-files-found: ignore
-# production monitor: schedule/manual plus source-change trigger for live diagnostics
