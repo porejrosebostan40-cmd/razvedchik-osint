@@ -59,12 +59,12 @@ def _content_origin(e):
     title=re.sub(r'\W+',' ',str(e.get('title','')).lower()).strip(); snippet=re.sub(r'\W+',' ',str(e.get('snippet','')).lower()).strip()
     if not title:return 'publisher:' + _source_family(e)
     return 'content:' + hashlib.sha256((title+'|'+snippet).encode()).hexdigest()[:20]
-def _compact_events(events,limit=10):
+def _compact_events(events,limit=6):
     unique={_eid(e):e for e in (events or [])}; selected=[]; seen=set()
     def add(e):
         eid=_eid(e)
         if eid in seen:return
-        selected.append({'event_id':eid,'url':str(e.get('url',''))[:220],'title':str(e.get('title',''))[:120],'snippet':str(e.get('snippet',''))[:180],'region':str(e.get('region',''))[:40],'kind':str(e.get('kind',''))[:30]}); seen.add(eid)
+        selected.append({'event_id':eid,'url':str(e.get('url',''))[:220],'title':str(e.get('title',''))[:120],'snippet':str(e.get('snippet',''))[:120],'region':str(e.get('region',''))[:40],'kind':str(e.get('kind',''))[:30]}); seen.add(eid)
     for e in sorted(unique.values(),key=lambda e: (_has_root(e), _has_target(e) and _has_action(e), _is_primary(e.get('url','')), _timestamp(e)),reverse=True):
         if _has_root(e): add(e)
         if len(selected)>=limit: break
@@ -120,7 +120,7 @@ def analyze(events):
         forecast['evidence_chain']={'version':2,'metrics':{},'support_edges':[],'contradiction_edges':[],'fingerprint':'','error':type(e).__name__}
     if not SETTINGS.openai_api_key:return _fallback(events,'OPENAI_API_KEY is not configured',forecast)
     compact=_compact_events(events); context={'scenario_id':SCENARIO_ID,'scenario_question':SCENARIO_QUESTION,'pattern':{k:v for k,v in forecast.items() if k!='_events'},'evidence_chain':forecast.get('evidence_chain',{}),'events':compact}
-    payload={'model':SETTINGS.openai_model,'instructions':SYSTEM,'input':'Return only JSON. Analyze only the evidence below. '+json.dumps(context,ensure_ascii=False,separators=(',',':')),'text':{'format':{'type':'json_object'}},'max_output_tokens':900,'store':False}
+    payload={'model':SETTINGS.openai_model,'instructions':SYSTEM,'input':'Return only JSON. Analyze only the evidence below. '+json.dumps(context,ensure_ascii=False,separators=(',',':')),'text':{'format':{'type':'json_object'}},'max_output_tokens':500,'store':False}
     try:
         r=requests.post('https://api.openai.com/v1/responses',headers={'Authorization':f'Bearer {SETTINGS.openai_api_key}','Content-Type':'application/json'},json=payload,timeout=60); r.raise_for_status(); result=_extract_json(_response_text(r.json()))
         if not isinstance(result,dict):raise ValueError('model JSON is not object')
