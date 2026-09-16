@@ -143,12 +143,19 @@ def _resolve_forecasts(records, events, now=None):
     return out
 
 
-def _retrieval_telemetry(items, collected):
+def _retrieval_telemetry(items, collected, new_events, previous_total):
     regional_items = [x for x in items if x[0].startswith(('regional', 'region')) or ': ' in x[0]]
     with_results = sum(bool(collected.get(i, [])) for i in range(len(items)))
     regional_with_results = sum(bool(collected.get(i, [])) for i, item in enumerate(items) if item in regional_items)
     attempted = len(items)
     score = round(100 * with_results / attempted, 1) if attempted else 0.0
+    filter_counts = {'raw_results':0,'after_search_url_filter':0,'after_site_filter':0,'after_dedup':0}
+    for result in collected.values():
+        telemetry=getattr(result,'telemetry',{}) or {}
+        for key in filter_counts:
+            filter_counts[key]+=int(telemetry.get(key,0) or 0)
+    filter_counts['events_after_dedup']=int(new_events)
+    filter_counts['events_total_valid']=int(previous_total + new_events)
     return {
         'queries_attempted': attempted,
         'queries_with_results': with_results,
@@ -157,6 +164,7 @@ def _retrieval_telemetry(items, collected):
         'result_count': sum(len(v) for v in collected.values()),
         'retrieval_coverage_score': score,
         'coverage_is_retrieval_not_reality': True,
+        'filter_counts': filter_counts,
     }
 
 
@@ -173,7 +181,8 @@ def run():
             collected[i] = result
             events.extend(result)
 
-    store.add_events(events)
+    previous_total = len(store.recent(3000))
+    new_events = store.add_events(events)
     all_events = store.recent(3000)
     resolved = _resolve_forecasts(store.forecasts(), all_events)
     if resolved != store.forecasts():
@@ -183,14 +192,14 @@ def run():
     graph = build_evidence_graph(all_events)
     chain = compact_chain(graph)
     pattern['evidence_chain'] = chain
-    pattern['retrieval'] = _retrieval_telemetry(items, collected)
+    pattern['retrieval'] = _retrieval_telemetry(items, collected, new_events, previous_total)
 
     # Hard invariant: an empty evidence graph cannot produce a non-baseline forecast.
     # This prevents stale/phantom stages from contaminating calibration.
     if not all_events or not graph.get('nodes'):
         pattern = build_forecast([])
         pattern['evidence_chain'] = chain
-        pattern['retrieval'] = _retrieval_telemetry(items, collected)
+        pattern['retrieval'] = _retrieval_telemetry(items, collected, new_events, previous_total)
         decision = _no_evidence_decision(pattern, chain)
         decision['calibration'] = calibration_summary(resolved)
         decision['probability_calibration'] = {'probability': None, 'status': 'no_evidence', 'sample': len([r for r in resolved if r.get('resolved')])}
