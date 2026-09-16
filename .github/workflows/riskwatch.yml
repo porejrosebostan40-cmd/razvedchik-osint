@@ -94,8 +94,10 @@ jobs:
               forecasts[item.get('forecast_id',str(len(forecasts)))]=item
           forecasts=sorted(forecasts.values(),key=lambda x:x.get('created_ts',0))[-200:]
           forecasts=[compact_forecast(x) for x in forecasts]
-          cursor=max(int(remote.get('regional_cursor',0) or 0),int(local.get('regional_cursor',0) or 0))
-          merged={'events':events,'decisions':decisions,'forecasts':forecasts,'last_ai_ts':max(float(remote.get('last_ai_ts',0)),float(local.get('last_ai_ts',0))),'regional_cursor':cursor}
+          remote_progress=(int(remote.get('regional_cycle',0) or 0), int(remote.get('regional_cursor',0) or 0))
+          local_progress=(int(local.get('regional_cycle',0) or 0), int(local.get('regional_cursor',0) or 0))
+          progress=max(remote_progress,local_progress)
+          merged={'events':events,'decisions':decisions,'forecasts':forecasts,'last_ai_ts':max(float(remote.get('last_ai_ts',0)),float(local.get('last_ai_ts',0))),'regional_cursor':progress[1],'regional_cycle':progress[0]}
           payload=json.dumps(merged,ensure_ascii=False,separators=(',',':'))
           if len(payload.encode('utf-8')) >= 90_000_000: raise SystemExit('Refusing to persist state above 90 MB')
           Path('riskwatch_state.json').write_text(payload,encoding='utf-8')
