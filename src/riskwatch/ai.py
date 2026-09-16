@@ -126,8 +126,8 @@ def _save_ai_debug(response_data):
         raw=json.dumps(response_data,ensure_ascii=False,separators=(',',':'))
         raw=raw[:180000]
         Path('/tmp/riskwatch_ai_debug.json').write_text(raw,encoding='utf-8')
-    except Exception:
-        pass
+    except Exception as e:
+        print(f"DEBUG: _save_ai_debug failed: {e!r}")
 def analyze(events,forecast,evidence_graph=None):
     forecast=dict(forecast or {})
     try:
@@ -141,8 +141,13 @@ def analyze(events,forecast,evidence_graph=None):
     try:
         r=requests.post('https://api.openai.com/v1/responses',headers={'Authorization':f'Bearer {SETTINGS.openai_api_key}','Content-Type':'application/json'},json=payload,timeout=60); r.raise_for_status(); response=r.json(); usage=response.get('usage',{}) or {}; result=_extract_json(_response_text(response))
         if not isinstance(result,dict):raise ValueError('model JSON is not object')
-        result.setdefault('decision','WATCH'); result.setdefault('reason','OpenAI analysis completed'); validated=_validate(result,events,forecast); validated['usage']=usage
-        if validated.get('reason')=='AI claims failed semantic evidence gate; rejected': _save_ai_debug(response)
+        result.setdefault('decision','WATCH'); result.setdefault('reason','OpenAI analysis completed')
+        print(f"DEBUG: AI raw verdict={result.get('verdict')!r}")
+        validated=_validate(result,events,forecast); validated['usage']=usage
+        if validated.get('reason')=='AI claims failed semantic evidence gate; rejected':
+            print(f"DEBUG: calling _save_ai_debug, reason={validated.get('reason')!r}")
+            _save_ai_debug(response)
+            print(f"DEBUG: after _save_ai_debug, file exists={Path('/tmp/riskwatch_ai_debug.json').exists()}")
         return validated
     except requests.HTTPError as e:
         body=''
