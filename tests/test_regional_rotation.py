@@ -3,6 +3,10 @@ from riskwatch.runner import BATCH_SIZE, _queries_from_cursor
 from riskwatch.store import Store
 
 
+def _regional(items):
+    return tuple(item for item in items if ': ' in item[0])
+
+
 def test_regional_rotation_covers_all_queries_in_27_runs_without_overlap():
     total = len(REGIONS) * len(REGIONAL_TEMPLATES)
     assert total == 801
@@ -10,8 +14,7 @@ def test_regional_rotation_covers_all_queries_in_27_runs_without_overlap():
     batches = []
     for _ in range(27):
         items, next_cursor, wrapped = _queries_from_cursor(cursor)
-        regional = tuple(items[len(items) - BATCH_SIZE:])
-        batches.append(regional)
+        batches.append(_regional(items))
         cursor = next_cursor
 
     flattened = [item for batch in batches for item in batch]
