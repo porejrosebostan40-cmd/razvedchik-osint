@@ -158,6 +158,13 @@ jobs:
           name: riskwatch-search-debug
           path: /tmp/riskwatch_search_debug.html
           if-no-files-found: ignore
+      - name: Upload pre-A1 debug
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: riskwatch-pre-a1-debug
+          path: /tmp/riskwatch_pre_a1.json
+          if-no-files-found: ignore
       - name: Upload AI gate debug
         if: always()
         uses: actions/upload-artifact@v4
