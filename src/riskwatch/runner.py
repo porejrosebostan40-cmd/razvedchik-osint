@@ -237,7 +237,7 @@ def run():
             events.extend(result)
 
     previous_total = len(store.recent(3000))
-    new_events = store.add_events(events)
+    new_events = store.add_events([e for e in events if _has_target(e)])
     if not collection_failed:
         store.set_meta('regional_cursor', next_cursor)
         if wrapped:
