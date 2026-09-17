@@ -1,0 +1,35 @@
+name: Test Bing redirect decode (isolated)
+
+on:
+  workflow_dispatch:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install package
+        run: pip install -e .
+
+      - name: Run source HTML test
+        run: python scripts/test_site_query.py
+
+      - name: Run Bing decode test
+        run: python scripts/test_bing_decode.py
+
+      - name: Upload decode artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: test-bing-decode-result
+          path: |
+            /tmp/test_bing_decode_result.json
+            /tmp/test_site_query_Bing.html
+          if-no-files-found: ignore
