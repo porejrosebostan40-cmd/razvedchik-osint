@@ -67,21 +67,21 @@
     },
     "retrieval": {
       "queries_attempted": 54,
-      "queries_with_results": 9,
+      "queries_with_results": 7,
       "regional_queries_attempted": 30,
-      "regional_queries_with_results": 8,
-      "result_count": 45,
-      "retrieval_coverage_score": 16.7,
+      "regional_queries_with_results": 6,
+      "result_count": 38,
+      "retrieval_coverage_score": 13.0,
       "coverage_is_retrieval_not_reality": true,
       "filter_counts": {
-        "raw_results": 531,
-        "after_search_url_filter": 471,
-        "after_site_filter": 45,
-        "after_dedup": 45,
-        "events_after_dedup": 44,
-        "events_total_valid": 544
+        "raw_results": 536,
+        "after_search_url_filter": 475,
+        "after_site_filter": 38,
+        "after_dedup": 38,
+        "events_after_dedup": 0,
+        "events_total_valid": 500
       },
-      "regional_cursor": 510,
+      "regional_cursor": 540,
       "regional_cycle": 0,
       "regional_batch_wrapped": false,
       "regional_collection_failed": false
