@@ -48,12 +48,12 @@ REGIONAL_TEMPLATES = [
     ("Региональный УФСИН",'site:fsin.gov.ru "УФСИН" "{region}" ({terms})'),
     ("Региональный губернатор/правительство",'site:gov.ru "{region}" ({terms})'),
     ("Региональная прокуратура",'site:epp.genproc.gov.ru "{region}" ({terms})'),
-    ("Региональные органы власти",'"{region}" ({terms}) губернатор правительство'),
+    ("Региональные органы власти",'site:gov.ru "{region}" ({terms}) губернатор правительство'),
     ("Региональные закупки",'site:zakupki.gov.ru "{region}" ({terms})'),
-    ("Региональные СМИ","\"{region}\" ({terms}) мобилизация ФСИН губернатор"),
-    ("Региональные Telegram","site:t.me \"{region}\" ({terms})"),
-    ("Региональные VK","site:vk.com \"{region}\" ({terms})"),
-    ("Региональный YouTube","site:youtube.com \"{region}\" ({terms})")
+    ("Региональные СМИ",'site:gov.ru "{region}" ({terms}) мобилизация ФСИН губернатор'),
+    ("Региональные Telegram",'site:t.me "{region}" ({terms})'),
+    ("Региональные VK",'site:vk.com "{region}" ({terms})'),
+    ("Региональный YouTube",'site:youtube.com "{region}" ({terms})')
 ]
 
 def build_queries():
