@@ -1,29 +1,31 @@
-name: RiskWatch site.gov.ru diagnostic
+name: Test site query (isolated)
+
 on:
   workflow_dispatch:
-permissions:
-  contents: read
+
 jobs:
   test:
     runs-on: ubuntu-latest
-    timeout-minutes: 10
     steps:
       - uses: actions/checkout@v4
-        with:
-          fetch-depth: 1
+
       - uses: actions/setup-python@v5
         with:
-          python-version: '3.12'
-      - name: Install
-        run: python -m pip install --upgrade pip && pip install .
-      - name: Run isolated site.gov.ru test
-        run: python scripts/test_site_query.py 2>&1 | tee site-query-diagnostic.txt
-      - name: Upload diagnostic
+          python-version: '3.11'
+
+      - name: Install package
+        run: pip install -e .
+
+      - name: Run isolated test
+        run: python scripts/test_site_query.py
+
+      - name: Upload test artifacts
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: site-query-diagnostic
+          name: test-site-query-result
           path: |
-            site-query-diagnostic.txt
-            /tmp/riskwatch_site_query/*.html
-          if-no-files-found: warn
+            /tmp/test_site_query_result.json
+            /tmp/test_site_query_DuckDuckGo.html
+            /tmp/test_site_query_Bing.html
+          if-no-files-found: ignore
