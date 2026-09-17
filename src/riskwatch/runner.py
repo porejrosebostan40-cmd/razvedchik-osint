@@ -237,6 +237,25 @@ def run():
             events.extend(result)
 
     previous_total = len(store.recent(3000))
+    # TEMP: pre-A1 dump
+    import json
+    from pathlib import Path
+    Path("/tmp/riskwatch_pre_a1.json").write_text(
+        json.dumps([
+            {
+                "url": e.get("url", ""),
+                "title": e.get("title", ""),
+                "snippet": e.get("snippet", ""),
+                "query": e.get("query", ""),
+                "region": e.get("region", ""),
+            }
+            for e in events
+        ], ensure_ascii=False, indent=2),
+        encoding="utf-8",
+    )
+    import sys
+    print(f"DEBUG PRE-A1: {len(events)} events", file=sys.stderr)
+    # END TEMP
     new_events = store.add_events([e for e in events if _has_target(e)])
     if not collection_failed:
         store.set_meta('regional_cursor', next_cursor)
