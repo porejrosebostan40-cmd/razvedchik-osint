@@ -1,29 +1,34 @@
+DEBUG: AI raw verdict=None
+DEBUG: calling _save_ai_debug, reason='AI response missing verdict; rejected'
+DEBUG: after _save_ai_debug, file exists=True
 {
   "scenario_question": "Будут ли мужчин из мест лишения свободы, прежде всего из исправительных колоний, мобилизовывать/привлекать к военной службе после 20 сентября 2026 года?",
   "scenario_answer": "UNKNOWN",
   "probability": null,
-  "model_probability": null,
+  "model_probability": 0,
   "probability_calibration": {
     "probability": null,
-    "status": "no_evidence",
-    "sample": 0
+    "status": "insufficient_history",
+    "sample": 1,
+    "raw": 0,
+    "horizon": "7-30d"
   },
   "risk": null,
-  "model_risk": null,
+  "model_risk": 0,
   "confidence": 0,
-  "analysis_provider": "not_called",
-  "reason": "No target-specific evidence events survived retrieval/URL validation; analysis not performed",
+  "analysis_provider": "fallback",
+  "reason": "AI response missing verdict; rejected",
   "signals": [
     "pattern_stage=0",
     "structure_score=8"
   ],
   "missing_indicators": [
-    "валидные результаты публичного поиска",
-    "независимые источники",
-    "target-specific evidence"
+    "прямое решение о мобилизации/привлечении мужчин из ИК",
+    "независимые де-факто подтверждения подготовительных действий",
+    "наблюдаемый следующий этап цепочки"
   ],
-  "next_event": "UNKNOWN",
-  "horizon": "UNKNOWN",
+  "next_event": "administrative_preparation",
+  "horizon": "7-30d",
   "pattern": {
     "scenario_id": "prisoner_mobilization",
     "pattern_stage": 0,
@@ -31,88 +36,96 @@
     "observed_stages": [],
     "next_stage": "administrative_preparation",
     "next_event_horizon": "7-30d",
-    "independent_domains": 0,
-    "source_families": 0,
-    "regions_with_signals": 0,
+    "independent_domains": 1,
+    "source_families": 1,
+    "regions_with_signals": 1,
     "negative_indicators": 0,
-    "acceleration": 0.0,
+    "acceleration": 1.0,
     "structure_score": 8,
-    "evidence_score": 0,
+    "evidence_score": 20,
     "evidence_metrics": {
-      "score": 0,
-      "target_events": 0,
+      "score": 20,
+      "target_events": 2,
       "action_events": 0,
-      "independent_domains": 0,
-      "source_families": 0,
-      "primary_events": 0,
+      "independent_domains": 1,
+      "source_families": 1,
+      "primary_events": 2,
       "negative_indicators": 0
     },
     "interpretation": "isolated or early-stage signals; chain not established",
     "evidence_chain": {
       "version": 2,
       "metrics": {
-        "nodes": 0,
+        "nodes": 2,
         "edges": 0,
-        "source_families": 0,
-        "primary_nodes": 0,
+        "source_families": 1,
+        "primary_nodes": 2,
         "root_nodes": 0,
         "ordered_support_edges": 0,
         "contradictions": 0,
-        "regions_with_signals": 0,
-        "chain_score": 0
+        "regions_with_signals": 1,
+        "chain_score": 31
       },
       "support_edges": [],
       "contradiction_edges": [],
-      "fingerprint": "334359b90efed75d"
+      "fingerprint": "fdf5e16a11c8fa7d"
     },
     "retrieval": {
       "queries_attempted": 54,
-      "queries_with_results": 7,
+      "queries_with_results": 10,
       "regional_queries_attempted": 30,
-      "regional_queries_with_results": 6,
-      "result_count": 37,
-      "retrieval_coverage_score": 13.0,
+      "regional_queries_with_results": 9,
+      "result_count": 36,
+      "retrieval_coverage_score": 18.5,
       "coverage_is_retrieval_not_reality": true,
       "filter_counts": {
-        "raw_results": 535,
-        "after_search_url_filter": 469,
-        "after_site_filter": 37,
-        "after_dedup": 37,
-        "events_after_dedup": 0,
-        "events_total_valid": 500
+        "raw_results": 494,
+        "after_search_url_filter": 416,
+        "after_site_filter": 36,
+        "after_dedup": 36,
+        "events_after_dedup": 2,
+        "events_total_valid": 502
       },
-      "regional_cursor": 720,
+      "regional_cursor": 750,
       "regional_cycle": 0,
       "regional_batch_wrapped": false,
       "regional_collection_failed": false
     }
   },
   "calibration": {
-    "resolved": 0,
-    "brier": null,
-    "issued_brier": null,
+    "resolved": 1,
+    "base_rate": 0.0,
+    "brier": 0.0,
+    "issued_brier": 0.0,
     "brier_skill_score": null,
     "issued_brier_skill_score": null,
+    "calibration": [
+      {
+        "range": "0-9",
+        "n": 1,
+        "empirical_rate": 0.0
+      }
+    ],
     "calibration_status": "insufficient_history"
   },
   "evidence_chain": {
     "version": 2,
     "metrics": {
-      "nodes": 0,
+      "nodes": 2,
       "edges": 0,
-      "source_families": 0,
-      "primary_nodes": 0,
+      "source_families": 1,
+      "primary_nodes": 2,
       "root_nodes": 0,
       "ordered_support_edges": 0,
       "contradictions": 0,
-      "regions_with_signals": 0,
-      "chain_score": 0
+      "regions_with_signals": 1,
+      "chain_score": 31
     },
     "support_edges": [],
     "contradiction_edges": [],
-    "fingerprint": "334359b90efed75d"
+    "fingerprint": "fdf5e16a11c8fa7d"
   },
-  "forecast_basis": "no evidence",
-  "analytical_status": "FAILED_NO_EVIDENCE",
-  "hallucination_guard": "not_run_no_evidence"
+  "forecast_basis": "PATTERN_ENGINE\nscenario_id=prisoner_mobilization\npattern_stage=0\npattern_stage_name=baseline\nobserved_stages=[]\nnext_stage=administrative_preparation\nnext_event_horizon=7-30d\nindependent_domains=1\nsource_families=1\nregions_with_signals=1\nacceleration=1.0\nstructure_score=8\nevidence_score=20\nevidence_metrics={'score': 20, 'target_events': 2, 'action_events': 0, 'independent_domains': 1, 'source_families': 1, 'primary_events': 2, 'negative_indicators': 0}\nnegative_indicators=0\ninterpretation=isolated or early-stage signals; chain not established\nevidence_chain={'version': 2, 'metrics': {'nodes': 2, 'edges': 0, 'source_families': 1, 'primary_nodes': 2, 'root_nodes': 0, 'ordered_support_edges': 0, 'contradictions': 0, 'regions_with_signals': 1, 'chain_score': 31}, 'support_edges': [], 'contradiction_edges': [], 'fingerprint': 'fdf5e16a11c8fa7d'}\nretrieval={'queries_attempted': 54, 'queries_with_results': 10, 'regional_queries_attempted': 30, 'regional_queries_with_results': 9, 'result_count': 36, 'retrieval_coverage_score': 18.5, 'coverage_is_retrieval_not_reality': True, 'filter_counts': {'raw_results': 494, 'after_search_url_filter': 416, 'after_site_filter': 36, 'after_dedup': 36, 'events_after_dedup': 2, 'events_total_valid': 502}, 'regional_cursor': 750, 'regional_cycle': 0, 'regional_batch_wrapped': False, 'regional_collection_failed': False}\nCALIBRATION={'resolved': 1, 'base_rate': 0.0, 'brier': 0.0, 'issued_brier': 0.0, 'brier_skill_score': None, 'issued_brier_skill_score': None, 'calibration': [{'range': '0-9', 'n': 1, 'empirical_rate': 0.0}], 'calibration_status': 'insufficient_history'}\nstructure_score and evidence_score are evidence-strength measures, not probabilities; root probability requires temporal historical calibration.",
+  "analytical_status": "FAILED_AI",
+  "hallucination_guard": "fallback_no_claim_without_evidence"
 }
