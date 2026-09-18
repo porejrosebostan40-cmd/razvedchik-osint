@@ -156,3 +156,133 @@ def analyze(events,forecast,evidence_graph=None):
         except Exception:pass
         return _fallback(events,f'OpenAI HTTP failure: {getattr(e.response,"status_code",None)} {body}',forecast)
     except (requests.RequestException,ValueError,TypeError,KeyError) as e:return _fallback(events,f'OpenAI analysis failed: {type(e).__name__}: {str(e).replace(chr(10)," ")[:300]}',forecast)
+
+# === AI ORCHESTRATION: plan_queries + filter_events ===
+# Добавить в конец ai.py, после функции analyze()
+
+PLANNER_SYSTEM = """Ты планировщик поисковых запросов для OSINT-мониторинга.
+Твоя задача: для заданного региона РФ и сценария prisoner_mobilization
+сгенерировать 4-6 коротких поисковых запросов, которые Bing реально обработает.
+
+Правила:
+1. Каждый запрос — 2-5 слов, максимум 40 символов.
+2. НЕ используй OR, AND, кавычки, скобки — Bing их игнорирует на длинных запросах.
+3. НЕ используй site: — мы фильтруем URL отдельно.
+4. Используй: регион + термин из сценария (ФСИН, осужденные, колония, мобилизация, военная служба, УФСИН).
+5. Один запрос — одна тема. Не пытайся охватить всё сразу.
+6. Если регион — город федерального значения (Москва, СПб), используй название города.
+7. Если регион — республика/край/область, используй короткое название (без "республика", "край", "область").
+
+Ответ — строго JSON: {"queries": ["запрос1", "запрос2", ...]}"""
+
+FILTER_SYSTEM = """Ты фильтр результатов поиска для сценария prisoner_mobilization.
+Твоя задача: из списка результатов поиска (title + snippet + url) выбрать релевантные
+сценарию "будут ли мужчин из мест лишения свободы мобилизовывать/привлекать к военной службе".
+
+Критерии релевантности (достаточно ОДНОГО):
+1. Упоминаются осужденные/заключенные/колонии/ИК/ФСИН/УФСИН/СИЗО
+2. Упоминается мобилизация/военная служба/контракт/призыв + регион РФ
+3. Упоминается конкретное исправительное учреждение в регионе
+4. Официальный документ о военной службе для осужденных
+
+НЕ релевантно:
+- Спорт, культура, происшествия без связи с военной службой
+- Общие новости региона без упоминания ИК/осужденных
+- Зарубежные новости
+- Дубликаты одной новости
+
+Ответ — строго JSON: {"relevant": [true/false для каждого результата], "reasons": ["краткая причина для каждого"]}"""
+
+
+def _call_openai(system: str, user: str, max_tokens: int = 500) -> dict:
+    """Унифицированный вызов OpenAI Responses API."""
+    if not SETTINGS.openai_api_key:
+        raise RuntimeError("OPENAI_API_KEY is not configured")
+    payload = {
+        "model": SETTINGS.openai_model,
+        "instructions": system,
+        "input": user,
+        "text": {"format": {"type": "json_object"}},
+        "max_output_tokens": max_tokens,
+        "store": False,
+    }
+    r = requests.post(
+        "https://api.openai.com/v1/responses",
+        headers={
+            "Authorization": f"Bearer {SETTINGS.openai_api_key}",
+            "Content-Type": "application/json",
+        },
+        json=payload,
+        timeout=60,
+    )
+    r.raise_for_status()
+    response = r.json()
+    return _extract_json(_response_text(response))
+
+
+def plan_queries(region: str, scenario: str = "prisoner_mobilization") -> list:
+    """AI-планировщик: генерирует 4-6 коротких запросов для региона."""
+    user = f"Регион: {region}\nСценарий: {scenario}\nСгенерируй 4-6 коротких поисковых запросов."
+    try:
+        result = _call_openai(PLANNER_SYSTEM, user, max_tokens=200)
+        queries = result.get("queries", [])
+        valid = [q.strip() for q in queries if isinstance(q, str) and 3 <= len(q.strip()) <= 60]
+        return valid[:6]
+    except Exception:
+        return _fallback_queries(region)
+
+
+def _fallback_queries(region: str) -> list:
+    """Детерминированный fallback, если AI недоступен."""
+    short = region
+    for suffix in ("Республика ", "республика ", " край", " область", " автономный округ", " АО"):
+        short = short.replace(suffix, "")
+    short = short.strip()
+    return [
+        f"ФСИН {short}",
+        f"осужденные {short} мобилизация",
+        f"колония {short} военная служба",
+        f"{short} УФСИН новости",
+    ]
+
+
+def filter_events(events: list, scenario: str = "prisoner_mobilization") -> list:
+    """AI-фильтр: отбирает релевантные события из сырой выдачи Bing."""
+    if not events:
+        return []
+
+    seen_urls = set()
+    unique = []
+    for e in events:
+        url = e.get("url", "")
+        if url and url not in seen_urls:
+            seen_urls.add(url)
+            unique.append(e)
+
+    BATCH = 20
+    filtered = []
+    for i in range(0, len(unique), BATCH):
+        batch = unique[i:i + BATCH]
+        items = []
+        for j, e in enumerate(batch):
+            items.append({
+                "i": j,
+                "title": str(e.get("title", ""))[:150],
+                "snippet": str(e.get("snippet", ""))[:200],
+                "url": str(e.get("url", ""))[:100],
+            })
+        user = f"Сценарий: {scenario}\nРезультаты поиска:\n{json.dumps(items, ensure_ascii=False)}\n\nОпредели релевантность каждого результата."
+        try:
+            result = _call_openai(FILTER_SYSTEM, user, max_tokens=400)
+            relevant = result.get("relevant", [])
+            reasons = result.get("reasons", [])
+            for j, e in enumerate(batch):
+                if j < len(relevant) and relevant[j]:
+                    e["ai_relevance_reason"] = reasons[j] if j < len(reasons) else ""
+                    filtered.append(e)
+        except Exception:
+            for e in batch:
+                if has_target(e):
+                    filtered.append(e)
+
+    return filtered
