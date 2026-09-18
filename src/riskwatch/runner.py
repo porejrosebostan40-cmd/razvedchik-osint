@@ -254,6 +254,7 @@ def _collect_region_batch(store, regions_batch):
             except Exception:
                 continue
 
+        print(f"DEBUG region={region} queries={len(queries)} region_events={len(region_events)}", file=__import__("sys").stderr, flush=True)
         if region_events:
             filtered = filter_events(region_events)
             telemetry["after_ai_filter"] += len(filtered)
@@ -265,7 +266,7 @@ def _collect_region_batch(store, regions_batch):
 def run():
     store = Store()
 
-    BATCH_SIZE = 10
+    BATCH_SIZE = 1
     cursor = int(store.get_meta("regional_cursor", 0) or 0)
     cycle = int(store.get_meta("regional_cycle", 0) or 0)
 
