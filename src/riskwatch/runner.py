@@ -219,29 +219,76 @@ def _retrieval_telemetry(items, collected, new_events=0, previous_total=0):
     }
 
 
+def _collect_region_batch(store, regions_batch):
+    """Собирает события для батча регионов с AI-планировщиком и AI-фильтром."""
+    from .ai import plan_queries, filter_events
+
+    all_events = []
+    telemetry = {
+        "regions_planned": len(regions_batch),
+        "queries_generated": 0,
+        "queries_executed": 0,
+        "raw_results": 0,
+        "after_search_url_filter": 0,
+        "after_site_filter": 0,
+        "after_ai_filter": 0,
+        "events_added": 0,
+    }
+
+    for region in regions_batch:
+        queries = plan_queries(region)
+        telemetry["queries_generated"] += len(queries)
+
+        region_events = []
+        for q in queries:
+            try:
+                results = search(q)
+                telemetry["queries_executed"] += 1
+                for key in ("raw_results", "after_search_url_filter", "after_site_filter"):
+                    telemetry[key] += results.telemetry.get(key, 0)
+                for e in results:
+                    e["region"] = region
+                    e["kind"] = f"AI-planned: {region}"
+                    e["query"] = q
+                region_events.extend(results)
+            except Exception:
+                continue
+
+        if region_events:
+            filtered = filter_events(region_events)
+            telemetry["after_ai_filter"] += len(filtered)
+            all_events.extend(filtered)
+
+    return all_events, telemetry
+
+
 def run():
     store = Store()
-    events = []
-    cursor = int(store.get_meta('regional_cursor', 0) or 0)
-    cycle = int(store.get_meta('regional_cycle', 0) or 0)
-    items, next_cursor, wrapped = _queries_from_cursor(cursor)
-    collected = {}
-    collection_failed = False
-    with ThreadPoolExecutor(max_workers=MAX_WORKERS) as pool:
-        futures = {pool.submit(_collect_one, item): i for i, item in enumerate(items)}
-        for future in as_completed(futures):
-            i = futures[future]
-            result, failed = future.result()
-            collected[i] = result
-            collection_failed = collection_failed or failed
-            events.extend(result)
+
+    BATCH_SIZE = 10
+    cursor = int(store.get_meta("regional_cursor", 0) or 0)
+    cycle = int(store.get_meta("regional_cycle", 0) or 0)
+
+    start = cursor % len(REGIONS)
+    end = min(start + BATCH_SIZE, len(REGIONS))
+    regions_batch = REGIONS[start:end]
+    wrapped = end == len(REGIONS)
+    next_cursor = 0 if wrapped else end
+
+    events, telemetry = _collect_region_batch(store, regions_batch)
+
+    if not wrapped:
+        store.set_meta("regional_cursor", next_cursor)
+    else:
+        store.set_meta("regional_cursor", 0)
+        store.set_meta("regional_cycle", cycle + 1)
 
     previous_total = len(store.recent(3000))
-    # TEMP: pre-A1 dump
-    import json
-    from pathlib import Path
-    Path("/tmp/riskwatch_pre_a1.json").write_text(
-        json.dumps([
+
+    import json as _json
+    from pathlib import Path as _Path
+    _Path("/tmp/riskwatch_pre_a1.json").write_text(
+        _json.dumps([
             {
                 "url": e.get("url", ""),
                 "title": e.get("title", ""),
@@ -253,14 +300,12 @@ def run():
         ], ensure_ascii=False, indent=2),
         encoding="utf-8",
     )
-    import sys
-    print(f"DEBUG PRE-A1: {len(events)} events", file=sys.stderr)
-    # END TEMP
+    import sys as _sys
+    print(f"DEBUG PRE-A1: {len(events)} events", file=_sys.stderr)
+
     new_events = store.add_events([e for e in events if _has_target(e)])
-    if not collection_failed:
-        store.set_meta('regional_cursor', next_cursor)
-        if wrapped:
-            store.set_meta('regional_cycle', cycle + 1)
+    telemetry["events_added"] = new_events
+
     all_events = store.recent(3000)
     resolved = _resolve_forecasts(store.forecasts(), all_events)
     if resolved != store.forecasts():
@@ -270,18 +315,19 @@ def run():
     pattern = build_forecast(scenario_events)
     graph = build_evidence_graph(all_events)
     chain = compact_chain(graph)
-    pattern['evidence_chain'] = chain
-    pattern['retrieval'] = _retrieval_telemetry(items, collected, new_events, previous_total)
-    pattern['retrieval']['regional_cursor'] = int(store.get_meta('regional_cursor', 0) or 0)
-    pattern['retrieval']['regional_cycle'] = int(store.get_meta('regional_cycle', 0) or 0)
-    pattern['retrieval']['regional_batch_wrapped'] = wrapped
-    pattern['retrieval']['regional_collection_failed'] = collection_failed
+    pattern["evidence_chain"] = chain
+    pattern["retrieval"] = telemetry
+    pattern["retrieval"]["regional_cursor"] = int(store.get_meta("regional_cursor", 0) or 0)
+    pattern["retrieval"]["regional_cycle"] = int(store.get_meta("regional_cycle", 0) or 0)
+    pattern["retrieval"]["regional_batch_wrapped"] = wrapped
+    pattern["retrieval"]["regional_collection_failed"] = False
+
     signals = [f"pattern_stage={pattern.get('pattern_stage',0)}", f"structure_score={pattern.get('structure_score',0)}"]
 
-    if not all_events or not graph.get('nodes'):
+    if not all_events or not graph.get("nodes"):
         decision = _no_evidence_decision(pattern, chain, signals)
-        decision['calibration'] = calibration_summary(resolved)
-        decision['probability_calibration'] = {'probability': None, 'status': 'no_evidence', 'sample': len([r for r in resolved if r.get('resolved')])}
+        decision["calibration"] = calibration_summary(resolved)
+        decision["probability_calibration"] = {"probability": None, "status": "no_evidence", "sample": len([r for r in resolved if r.get("resolved")])}
         store.save_decision(decision)
         return decision
 
@@ -291,44 +337,44 @@ def run():
     else:
         decision = _throttled_decision(store)
 
-    raw_model_probability = decision.get('probability')
+    raw_model_probability = decision.get("probability")
     model_probability = int(raw_model_probability) if isinstance(raw_model_probability, (int, float)) else 0
-    horizon = pattern.get('next_event_horizon')
+    horizon = pattern.get("next_event_horizon")
     cal = calibrate_probability(model_probability, resolved, horizon=horizon)
-    calibrated = cal.get('status') in ('preliminary', 'measured')
-    calibrated_probability = float(cal.get('probability')) if calibrated else None
+    calibrated = cal.get("status") in ("preliminary", "measured")
+    calibrated_probability = float(cal.get("probability")) if calibrated else None
     issued_probability = calibrated_probability if calibrated else None
 
-    decision['model_probability'] = model_probability if raw_model_probability is not None else None
-    decision['probability'] = issued_probability
-    decision['probability_calibration'] = cal
-    decision['model_risk'] = int(decision.get('risk', 0)) if decision.get('risk') is not None else 0
-    decision['risk'] = round(issued_probability) if calibrated else None
-    decision['pattern'] = pattern
-    decision['signals'] = signals
-    decision['calibration'] = calibration
-    decision['evidence_chain'] = chain
-    decision['scenario_question'] = SCENARIO_QUESTION
-    decision['next_event'] = pattern.get('next_stage', 'UNKNOWN')
-    decision['horizon'] = horizon or 'UNKNOWN'
-    decision['forecast_basis'] = render_context(pattern, calibration)
-    decision['analytical_status'] = _analytical_status(decision)
+    decision["model_probability"] = model_probability if raw_model_probability is not None else None
+    decision["probability"] = issued_probability
+    decision["probability_calibration"] = cal
+    decision["model_risk"] = int(decision.get("risk", 0)) if decision.get("risk") is not None else 0
+    decision["risk"] = round(issued_probability) if calibrated else None
+    decision["pattern"] = pattern
+    decision["signals"] = signals
+    decision["calibration"] = calibration
+    decision["evidence_chain"] = chain
+    decision["scenario_question"] = SCENARIO_QUESTION
+    decision["next_event"] = pattern.get("next_stage", "UNKNOWN")
+    decision["horizon"] = horizon or "UNKNOWN"
+    decision["forecast_basis"] = render_context(pattern, calibration)
+    decision["analytical_status"] = _analytical_status(decision)
 
     evidence_ids = _evidence_ids(all_events)
     if not _episode_duplicate(store, pattern, evidence_ids):
         store.save_forecast(forecast_record(pattern, model_probability, evidence_ids=evidence_ids, calibrated_probability=issued_probability))
     store.save_decision(decision)
 
-    p = float(decision.get('probability')) if decision.get('probability') is not None else None
-    c = int(decision.get('confidence', 0))
-    answer = decision.get('scenario_answer', 'UNKNOWN')
-    structural_warning = (not calibrated and int(pattern.get('evidence_score', 0)) >= 75 and int(pattern.get('structure_score', 0)) >= 65 and int(chain.get('metrics', {}).get('chain_score', 0)) >= 55)
+    p = float(decision.get("probability")) if decision.get("probability") is not None else None
+    c = int(decision.get("confidence", 0))
+    answer = decision.get("scenario_answer", "UNKNOWN")
+    structural_warning = (not calibrated and int(pattern.get("evidence_score", 0)) >= 75 and int(pattern.get("structure_score", 0)) >= 65 and int(chain.get("metrics", {}).get("chain_score", 0)) >= 55)
     if (calibrated and p >= SETTINGS.alert_threshold) or structural_warning:
-        alert_type = 'CALIBRATED_RISK_ALERT' if calibrated else 'STRUCTURAL_WARNING_UNCALIBRATED'
-        probability_text = f'{p:.1f}%' if p is not None else 'UNAVAILABLE'
-        telegram('RISKWATCH %s\n\n%s\n\nОтвет системы: %s\nКалиброванная вероятность: %s\nМодельная некалиброванная оценка: %s%%\nМодельный риск: %s/100\nУверенность модели: %s%%\n\nСледующий вероятный шаг: %s\nГоризонт: %s\nЦепь доказательств: %s/100\n\n%s\n\nСигналы: %s\nОтсутствующие индикаторы: %s' % (
-            alert_type, SCENARIO_QUESTION, answer, probability_text, decision.get('model_probability', 0), decision.get('model_risk', 0), c,
-            decision.get('next_event', 'UNKNOWN'), decision.get('horizon', 'UNKNOWN'), chain.get('metrics', {}).get('chain_score', 0), decision.get('reason', ''),
-            '; '.join(decision.get('signals', [])[:6]), '; '.join(decision.get('missing_indicators', [])[:6])
+        alert_type = "CALIBRATED_RISK_ALERT" if calibrated else "STRUCTURAL_WARNING_UNCALIBRATED"
+        probability_text = f"{p:.1f}%" if p is not None else "UNAVAILABLE"
+        telegram("RISKWATCH %s\n\n%s\n\nОтвет системы: %s\nКалиброванная вероятность: %s\nМодельная некалиброванная оценка: %s%%\nМодельный риск: %s/100\nУверенность модели: %s%%\n\nСледующий вероятный шаг: %s\nГоризонт: %s\nЦепь доказательств: %s/100\n\n%s\n\nСигналы: %s\nОтсутствующие индикаторы: %s" % (
+            alert_type, SCENARIO_QUESTION, answer, probability_text, decision.get("model_probability", 0), decision.get("model_risk", 0), c,
+            decision.get("next_event", "UNKNOWN"), decision.get("horizon", "UNKNOWN"), chain.get("metrics", {}).get("chain_score", 0), decision.get("reason", ""),
+            "; ".join(decision.get("signals", [])[:6]), "; ".join(decision.get("missing_indicators", [])[:6])
         ))
     return decision
