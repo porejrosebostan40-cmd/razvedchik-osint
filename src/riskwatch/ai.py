@@ -7,7 +7,7 @@ from .semantics import safe_root_event, has_target, is_negative
 
 SCENARIO_ID='prisoner_mobilization'
 SCENARIO_QUESTION='Будут ли мужчин из мест лишения свободы, прежде всего из исправительных колоний, мобилизовывать/привлекать к военной службе после 20 сентября 2026 года?'
-SYSTEM='''Ты аналитическое ядро RiskWatch. Не являйся источником фактов: работай только с переданными events и deterministic evidence_chain.\nГлавный вопрос неизменен: будут ли мужчин из мест лишения свободы, прежде всего из исправительных колоний, мобилизовывать/привлекать к военной службе после 20 сентября 2026 года?\nRules include the root scenario requirement: 7) Для YES нужен target-specific root signal либо согласованная цепочка, ведущая к root scenario. 8) Для NO нужна явная отрицательная evidence; отсутствие новости само по себе не является доказательством NO. 9) Верни только JSON.\n'''
+SYSTEM='''Ты аналитическое ядро RiskWatch. Не являйся источником фактов: работай только с переданными events и deterministic evidence_chain.\nГлавный вопрос неизменен: будут ли мужчин из мест лишения свободы, прежде всего из исправительных колоний, мобилизовывать/привлекать к военной службе после 20 сентября 2026 года?\nФОРМАТ ОТВЕТА — строго JSON: {"verdict":"yes|no|undetermined","probability":0,"confidence":0,"risk":0,"facts":[],"inferences":[],"missing_indicators":[],"next_event":"","horizon":"","forecast_basis":""}. Поле verdict обязательно. Не используй assessment.\nRules include the root scenario requirement: 7) Для YES нужен target-specific root signal либо согласованная цепочка, ведущая к root scenario. 8) Для NO нужна явная отрицательная evidence; отсутствие новости само по себе не является доказательством NO. 9) Верни только JSON.\n'''
 PRIMARY_DOMAINS=('kremlin.ru','government.ru','mil.ru','fsin.gov.ru','minjust.gov.ru','duma.gov.ru','council.gov.ru','publication.pravo.gov.ru','zakupki.gov.ru','gov.ru','epp.genproc.gov.ru')
 NEGATIVE_TERMS=('опроверг','не подтверд','отменен','отменён','отказ','не планируется','ложн','фейк','исключен','исключён')
 
@@ -86,7 +86,7 @@ def _validate_claim(claim,allowed):
     return {'text':claim['text'].strip()[:600],'event_ids':ids}
 def _validate(result,events,forecast=None):
     forecast=forecast or {}; allowed={_eid(e):e for e in events}; facts=[]; inf=[]
-    raw_verdict=result.get('verdict', result.get('scenario_answer')) if isinstance(result,dict) else None
+    raw_verdict=result.get('verdict', result.get('scenario_answer', result.get('assessment'))) if isinstance(result,dict) else None
     if not isinstance(raw_verdict,str): return _fallback(events,'AI response missing verdict; rejected',forecast)
     verdict=raw_verdict.strip().lower()
     if verdict in ('undetermined','unknown','indeterminate'):
