@@ -1,0 +1,32 @@
+name: Test retrieval sources (isolated)
+
+on:
+  workflow_dispatch:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install package
+        run: pip install -e .
+
+      - name: Run isolated retrieval test
+        run: python scripts/test_retrieval_sources.py
+
+      - name: Upload retrieval artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: test-retrieval-sources-result
+          path: |
+            /tmp/test_retrieval_sources_result.json
+            /tmp/test_retrieval_*.html
+          if-no-files-found: ignore
