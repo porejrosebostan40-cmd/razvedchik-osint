@@ -62,7 +62,7 @@ def _matches_site(url, targets):
 def _usable_result_url(url, targets):
     url=_clean(url)
     domain=_domain(url)
-    if not domain or domain in SEARCH_ENGINE_DOMAINS or any(domain.endswith("."+x) for x in SEARCH_ENGINE_DOMAINS):
+    if not domain or domain in SEARCH_ENGINE_DOMAINS or any(domain.endswith("." + x) for x in SEARCH_ENGINE_DOMAINS):
         return False
     return _matches_site(url, targets)
 
@@ -117,6 +117,13 @@ def _extract_results(soup, source, targets, limit):
             sn=node.select_one(".b_caption p") if node else None
         if sn: snippet=sn.get_text(" ",strip=True)
         out.append({"source":source,"url":_clean(a.get("href","")),"title":title,"snippet":snippet,"query":""})
+    print(
+        f"DEBUG _extract_results source={source} raw={raw_results} "
+        f"after_search={after_search_filter} after_site={after_site_filter} "
+        f"anchors={len(anchors)} out={len(out)}",
+        file=__import__("sys").stderr,
+        flush=True,
+    )
     return SearchResult(out,telemetry)
 
 
@@ -149,12 +156,22 @@ def search(query, limit=None):
             _write_raw_debug(source,query,r.text)
             soup=BeautifulSoup(r.text,"html.parser")
             out=_extract_results(soup,source,targets,limit)
+            print(
+                f"DEBUG search source={source} out_len={len(out)} telemetry={out.telemetry}",
+                file=__import__("sys").stderr,
+                flush=True,
+            )
             for key,value in out.telemetry.items():
                 aggregate[key]+=value
             if out:
                 for item in out: item["query"]=query
                 out.telemetry=aggregate
                 return out
-        except requests.RequestException:
+        except requests.RequestException as e:
+            print(
+                f"DEBUG search source={source} REQUEST_EXCEPTION={type(e).__name__}: {str(e).replace(chr(10),' ')[:300]}",
+                file=__import__("sys").stderr,
+                flush=True,
+            )
             pass
     return SearchResult([],aggregate)
