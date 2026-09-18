@@ -1,0 +1,34 @@
+name: Test search queries (isolated)
+
+on:
+  workflow_dispatch:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install package
+        run: pip install -e .
+
+      - name: Run isolated search queries test
+        run: python scripts/test_search_queries.py
+
+      - name: Upload search query artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: test-search-queries-result
+          path: |
+            /tmp/test_search_queries_result.json
+            /tmp/test_search_queries_A.html
+            /tmp/test_search_queries_B.html
+            /tmp/test_search_queries_C.html
+          if-no-files-found: ignore
