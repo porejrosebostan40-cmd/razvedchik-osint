@@ -247,8 +247,16 @@ def _fallback_queries(region: str) -> list:
 
 
 def filter_events(events: list, scenario: str = "prisoner_mobilization") -> list:
-    """AI-фильтр: отбирает релевантные события из сырой выдачи Bing."""
+    """AI-фильтр: отбирает релевантные события из сырой выдачи."""
+    import sys
+
+    print(
+        f"DEBUG filter_events: input={len(events or [])}",
+        file=sys.stderr,
+        flush=True,
+    )
     if not events:
+        print("DEBUG filter_events: empty input -> []", file=sys.stderr, flush=True)
         return []
 
     seen_urls = set()
@@ -259,8 +267,15 @@ def filter_events(events: list, scenario: str = "prisoner_mobilization") -> list
             seen_urls.add(url)
             unique.append(e)
 
+    print(
+        f"DEBUG filter_events: unique={len(unique)}",
+        file=sys.stderr,
+        flush=True,
+    )
+
     BATCH = 20
     filtered = []
+    debug_batches = []
     for i in range(0, len(unique), BATCH):
         batch = unique[i:i + BATCH]
         items = []
@@ -276,13 +291,69 @@ def filter_events(events: list, scenario: str = "prisoner_mobilization") -> list
             result = _call_openai(FILTER_SYSTEM, user, max_tokens=400)
             relevant = result.get("relevant", [])
             reasons = result.get("reasons", [])
+            passed = 0
             for j, e in enumerate(batch):
                 if j < len(relevant) and relevant[j]:
                     e["ai_relevance_reason"] = reasons[j] if j < len(reasons) else ""
                     filtered.append(e)
-        except Exception:
+                    passed += 1
+            preview = json.dumps(result, ensure_ascii=False)[:400]
+            print(
+                f"DEBUG filter_events: batch={i // BATCH + 1} size={len(batch)} "
+                f"result_preview={preview!r} relevant_type={type(relevant).__name__} "
+                f"relevant_len={len(relevant) if isinstance(relevant, list) else 'NA'} "
+                f"passed={passed}",
+                file=sys.stderr,
+                flush=True,
+            )
+            debug_batches.append({
+                "batch": i // BATCH + 1,
+                "size": len(batch),
+                "result_preview": preview,
+                "relevant_type": type(relevant).__name__,
+                "relevant_len": len(relevant) if isinstance(relevant, list) else None,
+                "passed": passed,
+            })
+        except Exception as e:
+            fallback_passed = 0
             for e in batch:
                 if has_target(e):
                     filtered.append(e)
+                    fallback_passed += 1
+            print(
+                f"DEBUG filter_events: batch={i // BATCH + 1} size={len(batch)} "
+                f"EXCEPTION={type(e).__name__}: {str(e).replace(chr(10), ' ')[:400]} "
+                f"fallback_passed={fallback_passed}",
+                file=sys.stderr,
+                flush=True,
+            )
+            debug_batches.append({
+                "batch": i // BATCH + 1,
+                "size": len(batch),
+                "exception": f"{type(e).__name__}: {str(e).replace(chr(10), ' ')[:400]}",
+                "fallback_passed": fallback_passed,
+            })
 
+    try:
+        Path("/tmp/riskwatch_filter_debug.json").write_text(
+            json.dumps({
+                "input": len(events),
+                "unique": len(unique),
+                "batches": debug_batches,
+                "filtered": len(filtered),
+            }, ensure_ascii=False, indent=2),
+            encoding="utf-8",
+        )
+    except Exception as e:
+        print(
+            f"DEBUG filter_events: debug_file_exception={type(e).__name__}: {e}",
+            file=sys.stderr,
+            flush=True,
+        )
+
+    print(
+        f"DEBUG filter_events: total_filtered={len(filtered)}",
+        file=sys.stderr,
+        flush=True,
+    )
     return filtered
