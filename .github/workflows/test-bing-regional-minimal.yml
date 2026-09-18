@@ -1,0 +1,32 @@
+name: Test Bing regional minimal (isolated)
+
+on:
+  workflow_dispatch:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install package
+        run: pip install -e .
+
+      - name: Run isolated minimal regional test
+        run: python scripts/test_bing_regional_minimal.py
+
+      - name: Upload minimal regional artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: test-bing-regional-minimal-result
+          path: |
+            /tmp/test_bing_regional_minimal_result.json
+            /tmp/test_bing_regional_minimal_*.html
+          if-no-files-found: ignore
