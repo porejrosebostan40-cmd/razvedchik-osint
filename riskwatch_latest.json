@@ -1,11 +1,8 @@
-DEBUG: AI raw verdict=None
-DEBUG: calling _save_ai_debug, reason='AI response missing verdict; rejected'
-DEBUG: after _save_ai_debug, file exists=True
 {
   "scenario_question": "Будут ли мужчин из мест лишения свободы, прежде всего из исправительных колоний, мобилизовывать/привлекать к военной службе после 20 сентября 2026 года?",
   "scenario_answer": "UNKNOWN",
   "probability": null,
-  "model_probability": 0,
+  "model_probability": null,
   "probability_calibration": {
     "probability": null,
     "status": "insufficient_history",
@@ -71,22 +68,15 @@ DEBUG: after _save_ai_debug, file exists=True
       "fingerprint": "fdf5e16a11c8fa7d"
     },
     "retrieval": {
-      "queries_attempted": 54,
-      "queries_with_results": 10,
-      "regional_queries_attempted": 30,
-      "regional_queries_with_results": 9,
-      "result_count": 36,
-      "retrieval_coverage_score": 18.5,
-      "coverage_is_retrieval_not_reality": true,
-      "filter_counts": {
-        "raw_results": 494,
-        "after_search_url_filter": 416,
-        "after_site_filter": 36,
-        "after_dedup": 36,
-        "events_after_dedup": 2,
-        "events_total_valid": 502
-      },
-      "regional_cursor": 750,
+      "regions_planned": 10,
+      "queries_generated": 40,
+      "queries_executed": 40,
+      "raw_results": 379,
+      "after_search_url_filter": 217,
+      "after_site_filter": 217,
+      "after_ai_filter": 0,
+      "events_added": 0,
+      "regional_cursor": 48,
       "regional_cycle": 0,
       "regional_batch_wrapped": false,
       "regional_collection_failed": false
@@ -125,7 +115,6 @@ DEBUG: after _save_ai_debug, file exists=True
     "contradiction_edges": [],
     "fingerprint": "fdf5e16a11c8fa7d"
   },
-  "forecast_basis": "PATTERN_ENGINE\nscenario_id=prisoner_mobilization\npattern_stage=0\npattern_stage_name=baseline\nobserved_stages=[]\nnext_stage=administrative_preparation\nnext_event_horizon=7-30d\nindependent_domains=1\nsource_families=1\nregions_with_signals=1\nacceleration=1.0\nstructure_score=8\nevidence_score=20\nevidence_metrics={'score': 20, 'target_events': 2, 'action_events': 0, 'independent_domains': 1, 'source_families': 1, 'primary_events': 2, 'negative_indicators': 0}\nnegative_indicators=0\ninterpretation=isolated or early-stage signals; chain not established\nevidence_chain={'version': 2, 'metrics': {'nodes': 2, 'edges': 0, 'source_families': 1, 'primary_nodes': 2, 'root_nodes': 0, 'ordered_support_edges': 0, 'contradictions': 0, 'regions_with_signals': 1, 'chain_score': 31}, 'support_edges': [], 'contradiction_edges': [], 'fingerprint': 'fdf5e16a11c8fa7d'}\nretrieval={'queries_attempted': 54, 'queries_with_results': 10, 'regional_queries_attempted': 30, 'regional_queries_with_results': 9, 'result_count': 36, 'retrieval_coverage_score': 18.5, 'coverage_is_retrieval_not_reality': True, 'filter_counts': {'raw_results': 494, 'after_search_url_filter': 416, 'after_site_filter': 36, 'after_dedup': 36, 'events_after_dedup': 2, 'events_total_valid': 502}, 'regional_cursor': 750, 'regional_cycle': 0, 'regional_batch_wrapped': False, 'regional_collection_failed': False}\nCALIBRATION={'resolved': 1, 'base_rate': 0.0, 'brier': 0.0, 'issued_brier': 0.0, 'brier_skill_score': None, 'issued_brier_skill_score': None, 'calibration': [{'range': '0-9', 'n': 1, 'empirical_rate': 0.0}], 'calibration_status': 'insufficient_history'}\nstructure_score and evidence_score are evidence-strength measures, not probabilities; root probability requires temporal historical calibration.",
-  "analytical_status": "FAILED_AI",
-  "hallucination_guard": "fallback_no_claim_without_evidence"
+  "forecast_basis": "PATTERN_ENGINE\nscenario_id=prisoner_mobilization\npattern_stage=0\npattern_stage_name=baseline\nobserved_stages=[]\nnext_stage=administrative_preparation\nnext_event_horizon=7-30d\nindependent_domains=1\nsource_families=1\nregions_with_signals=1\nacceleration=1.0\nstructure_score=8\nevidence_score=20\nevidence_metrics={'score': 20, 'target_events': 2, 'action_events': 0, 'independent_domains': 1, 'source_families': 1, 'primary_events': 2, 'negative_indicators': 0}\nnegative_indicators=0\ninterpretation=isolated or early-stage signals; chain not established\nevidence_chain={'version': 2, 'metrics': {'nodes': 2, 'edges': 0, 'source_families': 1, 'primary_nodes': 2, 'root_nodes': 0, 'ordered_support_edges': 0, 'contradictions': 0, 'regions_with_signals': 1, 'chain_score': 31}, 'support_edges': [], 'contradiction_edges': [], 'fingerprint': 'fdf5e16a11c8fa7d'}\nretrieval={'regions_planned': 10, 'queries_generated': 40, 'queries_executed': 40, 'raw_results': 379, 'after_search_url_filter': 217, 'after_site_filter': 217, 'after_ai_filter': 0, 'events_added': 0, 'regional_cursor': 48, 'regional_cycle': 0, 'regional_batch_wrapped': False, 'regional_collection_failed': False}\nCALIBRATION={'resolved': 1, 'base_rate': 0.0, 'brier': 0.0, 'issued_brier': 0.0, 'brier_skill_score': None, 'issued_brier_skill_score': None, 'calibration': [{'range': '0-9', 'n': 1, 'empirical_rate': 0.0}], 'calibration_status': 'insufficient_history'}\nstructure_score and evidence_score are evidence-strength measures, not probabilities; root probability requires temporal historical calibration.",
+  "analytical_status": "FAILED_AI"
 }
