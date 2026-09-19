@@ -1,6 +1,3 @@
-DEBUG: AI raw verdict='undetermined'
-DEBUG: calling _save_ai_debug, reason='AI undetermined response contained claims; rejected'
-DEBUG: after _save_ai_debug, file exists=True
 {
   "scenario_question": "Будут ли мужчин из мест лишения свободы, прежде всего из исправительных колоний, мобилизовывать/привлекать к военной службе после 20 сентября 2026 года?",
   "scenario_answer": "UNKNOWN",
@@ -17,7 +14,7 @@ DEBUG: after _save_ai_debug, file exists=True
   "model_risk": 0,
   "confidence": 0,
   "analysis_provider": "fallback",
-  "reason": "AI undetermined response contained claims; rejected",
+  "reason": "OpenAI analysis failed: ValueError: model output has no JSON object",
   "signals": [
     "pattern_stage=0",
     "structure_score=8"
