@@ -1,0 +1,29 @@
+name: TinyFish URL quality
+
+on:
+  workflow_dispatch:
+
+jobs:
+  quality:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - run: pip install requests
+
+      - name: Run TinyFish URL quality test
+        env:
+          TINYFISH_API_KEY: ${{ secrets.TINYFISH_API_KEY }}
+        run: python scripts/test_tinyfish_url_quality.py
+
+      - name: Upload URL quality report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: tinyfish-url-quality
+          path: tinyfish_url_quality.json
