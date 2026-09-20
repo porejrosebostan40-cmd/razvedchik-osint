@@ -357,3 +357,176 @@ def filter_events(events: list, scenario: str = "prisoner_mobilization") -> list
         flush=True,
     )
     return filtered
+
+
+# === WEB SEARCH ANALYSIS (isolated test path; production analyze() remains unchanged) ===
+
+def _web_search_output(response):
+    items = response.get("output") or []
+    has_search = any(isinstance(x, dict) and x.get("type") == "web_search_call" for x in items)
+    citations = []
+    texts = []
+    for item in items:
+        if not isinstance(item, dict):
+            continue
+        if item.get("type") == "message":
+            for part in item.get("content") or []:
+                if isinstance(part, dict) and part.get("type") == "output_text":
+                    text = part.get("text")
+                    if isinstance(text, str):
+                        texts.append(text)
+                    for ann in part.get("annotations") or []:
+                        if isinstance(ann, dict) and ann.get("type") == "url_citation":
+                            url = ann.get("url")
+                            if isinstance(url, str) and url:
+                                citations.append({
+                                    "url": url,
+                                    "title": str(ann.get("title") or "")[:300],
+                                })
+    return has_search, citations, "\n".join(texts)
+
+
+WEB_SEARCH_SYSTEM = """Ты аналитическое ядро RiskWatch.
+Корневой сценарий: будут ли мужчин из мест лишения свободы, прежде всего из исправительных колоний,
+мобилизовывать/привлекать к военной службе после 20 сентября 2026 года?
+
+Проведи самостоятельное веб-исследование через web_search. Используй методологию ниже.
+Не считай обсуждение, общую новость или повтор публикации доказательством реализации.
+Ищи первичные документы, региональные подтверждения, независимые сообщения и отрицательные данные.
+Отделяй наблюдаемые факты от выводов.
+
+МЕТОДОЛОГИЯ:
+""" + __import__("riskwatch.methodology", fromlist=["METHODOLOGY_TEXT"]).METHODOLOGY_TEXT + """
+
+Ответ строго JSON:
+{"verdict":"yes|no|undetermined","probability":0,"confidence":0,"risk":0,
+"facts":[],"inferences":[],"missing_indicators":[],"next_event":"","horizon":"","forecast_basis":""}
+
+Для каждого material fact/inference укажи source_url из найденного веб-поиска.
+Для YES обязательно наличие прямого target-specific сигнала или согласованной цепочки.
+Для NO обязательно наличие явного отрицательного доказательства.
+Если доказательств недостаточно — verdict=undetermined.
+Не используй поле assessment.
+"""
+
+
+def analyze_region_web_search(region: str, scenario: str = SCENARIO_ID) -> dict:
+    """Один автономный web_search-анализ региона с безопасной валидацией."""
+    import time
+
+    if not SETTINGS.openai_api_key:
+        return {
+            "scenario_id": SCENARIO_ID, "region": region,
+            "scenario_answer": "UNKNOWN", "analysis_provider": "fallback",
+            "reason": "OPENAI_API_KEY is not configured",
+            "web_search_call": False, "citations": [],
+        }
+
+    user = (
+        f"Регион: {region}\n"
+        f"Сценарий: {scenario}\n"
+        "Исследуй только этот регион, но используй федеральные источники при необходимости. "
+        "Верни строго JSON по заданной схеме."
+    )
+    payload = {
+        "model": SETTINGS.openai_model,
+        "instructions": WEB_SEARCH_SYSTEM,
+        "input": user,
+        "tools": [{"type": "web_search"}],
+        "text": {"format": {"type": "json_object"}},
+        "max_output_tokens": 700,
+        "store": False,
+    }
+
+    last_error = None
+    response = None
+    for attempt in range(3):
+        try:
+            r = requests.post(
+                "https://api.openai.com/v1/responses",
+                headers={
+                    "Authorization": f"Bearer {SETTINGS.openai_api_key}",
+                    "Content-Type": "application/json",
+                },
+                json=payload,
+                timeout=90,
+            )
+            if r.status_code == 429 and attempt < 2:
+                retry_after = r.headers.get("Retry-After")
+                delay = float(retry_after) if retry_after and retry_after.replace(".", "", 1).isdigit() else 5 * (2 ** attempt)
+                time.sleep(min(delay, 30))
+                continue
+            r.raise_for_status()
+            response = r.json()
+            break
+        except requests.RequestException as exc:
+            last_error = f"{type(exc).__name__}: {str(exc).replace(chr(10), ' ')[:400]}"
+            if attempt < 2:
+                time.sleep(2 ** attempt)
+                continue
+
+    if response is None:
+        return {
+            "scenario_id": SCENARIO_ID, "region": region,
+            "scenario_answer": "UNKNOWN", "analysis_provider": "fallback",
+            "reason": f"OpenAI request failed: {last_error}",
+            "web_search_call": False, "citations": [],
+        }
+
+    has_search, citations, _ = _web_search_output(response)
+    try:
+        result = _extract_json(_response_text(response))
+        if not isinstance(result, dict):
+            raise ValueError("model JSON is not object")
+    except (ValueError, TypeError, json.JSONDecodeError) as exc:
+        return {
+            "scenario_id": SCENARIO_ID, "region": region,
+            "scenario_answer": "UNKNOWN", "analysis_provider": "openai",
+            "reason": f"Invalid JSON response: {type(exc).__name__}: {exc}",
+            "web_search_call": has_search, "citations": citations,
+            "response_id": response.get("id"),
+        }
+
+    raw_verdict = result.get("verdict", result.get("assessment"))
+    verdict = str(raw_verdict or "undetermined").strip().lower()
+    if verdict in ("unknown", "indeterminate"):
+        verdict = "undetermined"
+    if verdict not in ("yes", "no", "undetermined"):
+        verdict = "undetermined"
+
+    facts = result.get("facts") if isinstance(result.get("facts"), list) else []
+    inferences = result.get("inferences") if isinstance(result.get("inferences"), list) else []
+    if not has_search:
+        verdict = "undetermined"
+        reason = "web_search_call missing; directional verdict rejected"
+    elif verdict == "yes" and not citations:
+        verdict = "undetermined"
+        reason = "YES rejected: no web citation"
+    elif verdict == "no" and not citations:
+        verdict = "undetermined"
+        reason = "NO rejected: no web citation"
+    else:
+        reason = "web_search analysis validated"
+
+    out = {
+        "scenario_id": SCENARIO_ID,
+        "region": region,
+        "scenario_question": SCENARIO_QUESTION,
+        "scenario_answer": "YES" if verdict == "yes" else ("NO" if verdict == "no" else "UNKNOWN"),
+        "probability": _score(result.get("probability")) if verdict != "undetermined" else None,
+        "confidence": _score(result.get("confidence")),
+        "risk": _score(result.get("risk")) if verdict != "undetermined" else None,
+        "facts": facts[:20],
+        "inferences": inferences[:20],
+        "missing_indicators": result.get("missing_indicators", []) if isinstance(result.get("missing_indicators"), list) else [],
+        "next_event": str(result.get("next_event") or "UNKNOWN")[:500],
+        "horizon": str(result.get("horizon") or "UNKNOWN")[:100],
+        "forecast_basis": str(result.get("forecast_basis") or "")[:900],
+        "analysis_provider": "openai",
+        "web_search_call": has_search,
+        "citations": citations[:30],
+        "reason": reason,
+        "response_id": response.get("id"),
+        "usage": response.get("usage") or {},
+    }
+    return out
