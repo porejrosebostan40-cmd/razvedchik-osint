@@ -2,6 +2,9 @@ name: Test web_search tool
 
 on:
   workflow_dispatch:
+  push:
+    paths:
+      - ".github/workflows/test-web-search.yml"
 
 permissions:
   contents: read
@@ -19,6 +22,16 @@ jobs:
             exit 1
           fi
           echo "OPENAI_API_KEY present"
+
+      - name: Validate TinyFish configuration
+        env:
+          TINYFISH_API_KEY: ${{ secrets.TINYFISH_API_KEY }}
+        run: |
+          if [ -z "$TINYFISH_API_KEY" ]; then
+            echo "TINYFISH_API_KEY is empty"
+            exit 1
+          fi
+          echo "TINYFISH_API_KEY present"
 
       - name: Test web_search via curl
         env:
