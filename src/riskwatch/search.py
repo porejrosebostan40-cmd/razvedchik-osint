@@ -5,6 +5,7 @@ import requests
 from urllib.parse import quote_plus, urlparse, parse_qs, unquote
 from .config import SETTINGS
 from .search_result import SearchResult
+from .exa_search import search as exa_search
 
 HEADERS={"User-Agent":"RiskWatch/1.0 (+public-source-monitoring)"}
 SEARCH_ENGINE_DOMAINS=("duckduckgo.com","bing.com","google.com","yandex.ru","yandex.com")
@@ -117,9 +118,7 @@ def _write_raw_debug(source, query, html):
         with open(path,"a",encoding="utf-8") as f: f.write(payload)
     except OSError: pass
 
-def search(query, limit=None):
-    limit=limit or SETTINGS.max_results_per_query
-    targets=_site_targets(query)
+def _search_legacy(query, limit, targets):
     endpoints=[("DuckDuckGo","https://html.duckduckgo.com/html/?q="+quote_plus(query)),("Bing","https://www.bing.com/search?q="+quote_plus(query))]
     aggregate={"raw_results":0,"after_search_url_filter":0,"after_site_filter":0,"after_dedup":0}
     for source,url in endpoints:
@@ -138,3 +137,60 @@ def search(query, limit=None):
             print(f"DEBUG search source={source} REQUEST_EXCEPTION={type(e).__name__}: {str(e).replace(chr(10),' ')[:300]}",file=__import__("sys").stderr,flush=True)
             pass
     return SearchResult([],aggregate)
+
+
+def _merge_results(query, limit, exa_result, legacy_result):
+    exa_telemetry=getattr(exa_result,"telemetry",{}) or {}
+    legacy_telemetry=getattr(legacy_result,"telemetry",{}) or {}
+
+    merged={}
+    for item in exa_result:
+        url=item.get("url")
+        if url:
+            merged[url]=dict(item)
+
+    for item in legacy_result:
+        url=item.get("url")
+        if not url:
+            continue
+        if url not in merged:
+            merged[url]=dict(item)
+            continue
+        existing=merged[url]
+        for field in ("title","snippet","publishedDate","author","score","id"):
+            if not existing.get(field) and item.get(field):
+                existing[field]=item[field]
+
+    merged_before_dedup=len(list(exa_result))+len(list(legacy_result))
+    merged_items=list(merged.values())
+    final_items=merged_items[:int(limit)]
+
+    telemetry={
+        "raw_results": int(exa_telemetry.get("exa_raw",0) or 0) + int(legacy_telemetry.get("raw_results",0) or 0),
+        "after_search_url_filter": int(exa_telemetry.get("after_url_filter",0) or 0) + int(legacy_telemetry.get("after_search_url_filter",0) or 0),
+        "after_site_filter": int(legacy_telemetry.get("after_site_filter",0) or 0),
+        "after_dedup": len(final_items),
+        "exa_raw": int(exa_telemetry.get("exa_raw",0) or 0),
+        "exa_after_url": int(exa_telemetry.get("after_url_filter",0) or 0),
+        "exa_after_dedup": int(exa_telemetry.get("after_dedup",0) or 0),
+        "exa_reason": exa_telemetry.get("reason"),
+        "search_raw": int(legacy_telemetry.get("raw_results",0) or 0),
+        "search_after_dedup": int(legacy_telemetry.get("after_dedup",0) or 0),
+        "merged_before_dedup": merged_before_dedup,
+        "merged_after_dedup": len(merged_items),
+    }
+    for item in final_items:
+        item["query"]=query
+    return SearchResult(final_items,telemetry)
+
+
+def search(query, limit=None):
+    limit=limit or SETTINGS.max_results_per_query
+    targets=_site_targets(query)
+
+    if targets:
+        return _search_legacy(query,limit,targets)
+
+    exa_result=exa_search(query,limit=limit)
+    legacy_result=_search_legacy(query,limit,targets)
+    return _merge_results(query,limit,exa_result,legacy_result)
