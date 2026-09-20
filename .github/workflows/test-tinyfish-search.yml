@@ -1,22 +1,22 @@
-name: Test TinyFish Search
+name: TinyFish smoke
 
 on:
   workflow_dispatch:
-  push:
-    paths:
-      - "scripts/smoke_tinyfish.py"
-      - ".github/workflows/test-tinyfish-search.yml"
 
 jobs:
   smoke:
     runs-on: ubuntu-latest
+    timeout-minutes: 5
     steps:
       - uses: actions/checkout@v4
 
-      - name: Install dependencies
-        run: python -m pip install requests
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - run: pip install requests
 
       - name: Run TinyFish Search smoke test
         env:
           TINYFISH_API_KEY: ${{ secrets.TINYFISH_API_KEY }}
-        run: python scripts/smoke_tinyfish.py
+        run: python scripts/smoke_tinyfish.py "РСО–Алания"
