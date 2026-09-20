@@ -4,6 +4,9 @@ import sys
 
 import requests
 
+REGION = sys.argv[1] if len(sys.argv) > 1 else "РСО–Алания"
+QUERY = f"мобилизация заключенных ФСИН {REGION}"
+
 
 def main() -> int:
     key = os.environ.get("TINYFISH_API_KEY")
@@ -15,51 +18,42 @@ def main() -> int:
         "https://api.search.tinyfish.ai",
         headers={"X-API-Key": key},
         params={
-            "query": "мобилизация заключенных ФСИН",
+            "query": QUERY,
             "location": "RU",
             "language": "ru",
-            "include_domains": "mil.ru",
-            "purpose": "Проверка официальных российских источников по теме мобилизации заключенных.",
         },
         timeout=30,
     )
 
     print(f"HTTP {r.status_code}")
-    print(f"CONTENT_TYPE {r.headers.get('content-type', '')}")
+    if r.status_code != 200:
+        print(f"BODY: {r.text[:2000]}")
+        return 1
 
     try:
         data = r.json()
     except ValueError:
-        print(r.text[:5000])
-        return 1 if r.status_code != 200 else 2
-
-    print(json.dumps(data, ensure_ascii=False, indent=2)[:10000])
-
-    if r.status_code != 200:
+        print(f"BODY: {r.text[:5000]}")
         return 1
 
-    results = data.get("results")
+    results = data.get("results", [])
     if not isinstance(results, list):
-        print("DEBUG invalid results type")
-        return 2
+        print("DEBUG: results is not an array")
+        print(json.dumps(data, ensure_ascii=False, indent=2)[:5000])
+        return 1
 
-    print(f"RESULT_COUNT {len(results)}")
-    for i, item in enumerate(results, 1):
-        print(
-            f"RESULT {i}: "
-            f"site={item.get('site_name')} "
-            f"url={item.get('url')} "
-            f"title={item.get('title')!r}"
-        )
+    print(f"QUERY: {data.get('query')}")
+    print(f"TOTAL_RESULTS: {data.get('total_results')}")
+    print(f"PAGE: {data.get('page')}")
+    print(f"RESULT_COUNT: {len(results)}")
 
-    bad_domains = [
-        item.get("url", "")
-        for item in results
-        if "mil.ru" not in item.get("url", "")
-    ]
-    print(f"NON_MIL_URL_COUNT {len(bad_domains)}")
-    if bad_domains:
-        print("NON_MIL_URLS", json.dumps(bad_domains, ensure_ascii=False))
+    for i, item in enumerate(results[:10], 1):
+        print("---")
+        print(f"title: {item.get('title')}")
+        print(f"url:   {item.get('url')}")
+        print(f"site:  {item.get('site_name')}")
+        print(f"date:  {item.get('date')}")
+        print(f"snip:  {(item.get('snippet') or '')[:120]}")
 
     return 0
 
