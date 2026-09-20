@@ -1,0 +1,42 @@
+name: Exa Search Smoke
+
+on:
+  push:
+    branches:
+      - test/exa-search-smoke
+
+jobs:
+  smoke:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - run: pip install -e .
+      - name: Real Exa smoke
+        env:
+          EXA_API_KEY: ${{ secrets.EXA_API_KEY }}
+        run: |
+          python - <<'PY'
+          from riskwatch.exa_search import search
+
+          query = "мобилизация заключенных ФСИН РСО-Алания"
+          result = search(query, limit=10, timeout=15)
+
+          print("RESULT_LEN:", len(result))
+          print("TELEMETRY:", result.telemetry)
+
+          for i, item in enumerate(result, 1):
+              print(f"RESULT_{i}:")
+              print("  source:", item.get("source"))
+              print("  url:", item.get("url"))
+              print("  title:", item.get("title"))
+              print("  snippet:", item.get("snippet"))
+              print("  publishedDate:", item.get("publishedDate"))
+              print("  author:", item.get("author"))
+
+          missing = [k for k in ("exa_raw", "after_url_filter", "after_dedup", "reason") if k not in result.telemetry]
+          if missing:
+              raise SystemExit(f"Missing telemetry fields: {missing}")
+          PY
