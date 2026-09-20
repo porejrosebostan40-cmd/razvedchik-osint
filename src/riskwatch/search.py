@@ -4,16 +4,11 @@ import os
 import requests
 from urllib.parse import quote_plus, urlparse, parse_qs, unquote
 from .config import SETTINGS
+from .search_result import SearchResult
 
 HEADERS={"User-Agent":"RiskWatch/1.0 (+public-source-monitoring)"}
 SEARCH_ENGINE_DOMAINS=("duckduckgo.com","bing.com","google.com","yandex.ru","yandex.com")
 DEBUG_MAX_BYTES=1_500_000
-
-class SearchResult(list):
-    def __init__(self, values=(), telemetry=None):
-        super().__init__(values)
-        self.telemetry=telemetry or {}
-
 
 def _clean(url):
     try:
@@ -34,7 +29,6 @@ def _clean(url):
         pass
     return url
 
-
 def _site_targets(query):
     targets=[]
     for token in str(query).split():
@@ -44,13 +38,11 @@ def _site_targets(query):
                 targets.append(value.removeprefix("www."))
     return tuple(targets)
 
-
 def _domain(url):
     try:
         return urlparse(url).netloc.lower().split(":")[0].removeprefix("www.")
     except ValueError:
         return ""
-
 
 def _matches_site(url, targets):
     if not targets:
@@ -58,14 +50,12 @@ def _matches_site(url, targets):
     domain=_domain(url)
     return bool(domain) and any(domain == target or domain.endswith("." + target) for target in targets)
 
-
 def _usable_result_url(url, targets):
     url=_clean(url)
     domain=_domain(url)
     if not domain or domain in SEARCH_ENGINE_DOMAINS or any(domain.endswith("." + x) for x in SEARCH_ENGINE_DOMAINS):
         return False
     return _matches_site(url, targets)
-
 
 def _extract_results(soup, source, targets, limit):
     selectors=(".result a.result__a","li.b_algo h2 a","h2 a") if source=="Bing" else (".result a.result__a",".result h2 a")
@@ -87,7 +77,7 @@ def _extract_results(soup, source, targets, limit):
     for a in raw:
         href=_clean(a.get("href", ""))
         domain=_domain(href)
-        if not domain or domain in SEARCH_ENGINE_DOMAINS or any(domain.endswith("."+x) for x in SEARCH_ENGINE_DOMAINS):
+        if not domain or domain in SEARCH_ENGINE_DOMAINS or any(domain.endswith("." + x) for x in SEARCH_ENGINE_DOMAINS):
             continue
         after_search_filter += 1
         if not _matches_site(href, targets):
@@ -99,12 +89,7 @@ def _extract_results(soup, source, targets, limit):
         anchors.append(a)
         if len(anchors)>=limit:
             break
-    telemetry={
-        "raw_results":raw_results,
-        "after_search_url_filter":after_search_filter,
-        "after_site_filter":after_site_filter,
-        "after_dedup":len(anchors),
-    }
+    telemetry={"raw_results":raw_results,"after_search_url_filter":after_search_filter,"after_site_filter":after_site_filter,"after_dedup":len(anchors)}
     out=[]
     for a in anchors:
         node=a.find_parent(class_="result") if source=="DuckDuckGo" else a.find_parent("li",class_="b_algo")
@@ -117,33 +102,20 @@ def _extract_results(soup, source, targets, limit):
             sn=node.select_one(".b_caption p") if node else None
         if sn: snippet=sn.get_text(" ",strip=True)
         out.append({"source":source,"url":_clean(a.get("href","")),"title":title,"snippet":snippet,"query":""})
-    print(
-        f"DEBUG _extract_results source={source} raw={raw_results} "
-        f"after_search={after_search_filter} after_site={after_site_filter} "
-        f"anchors={len(anchors)} out={len(out)}",
-        file=__import__("sys").stderr,
-        flush=True,
-    )
+    print(f"DEBUG _extract_results source={source} raw={raw_results} after_search={after_search_filter} after_site={after_site_filter} anchors={len(anchors)} out={len(out)}",file=__import__("sys").stderr,flush=True)
     return SearchResult(out,telemetry)
-
 
 def _write_raw_debug(source, query, html):
     path=os.getenv("RISKWATCH_DEBUG_HTML")
-    if not path:
-        return
+    if not path: return
     try:
         existing=0
-        if os.path.exists(path):
-            existing=os.path.getsize(path)
+        if os.path.exists(path): existing=os.path.getsize(path)
         remaining=max(0, DEBUG_MAX_BYTES-existing)
-        if remaining <= 0:
-            return
+        if remaining <= 0: return
         payload="<!-- source: "+source+" -->\n<!-- query: "+query.replace("--","-")+" -->\n" + html[:remaining]
-        with open(path,"a",encoding="utf-8") as f:
-            f.write(payload)
-    except OSError:
-        pass
-
+        with open(path,"a",encoding="utf-8") as f: f.write(payload)
+    except OSError: pass
 
 def search(query, limit=None):
     limit=limit or SETTINGS.max_results_per_query
@@ -156,22 +128,13 @@ def search(query, limit=None):
             _write_raw_debug(source,query,r.text)
             soup=BeautifulSoup(r.text,"html.parser")
             out=_extract_results(soup,source,targets,limit)
-            print(
-                f"DEBUG search source={source} out_len={len(out)} telemetry={out.telemetry}",
-                file=__import__("sys").stderr,
-                flush=True,
-            )
-            for key,value in out.telemetry.items():
-                aggregate[key]+=value
+            print(f"DEBUG search source={source} out_len={len(out)} telemetry={out.telemetry}",file=__import__("sys").stderr,flush=True)
+            for key,value in out.telemetry.items(): aggregate[key]+=value
             if out:
                 for item in out: item["query"]=query
                 out.telemetry=aggregate
                 return out
         except requests.RequestException as e:
-            print(
-                f"DEBUG search source={source} REQUEST_EXCEPTION={type(e).__name__}: {str(e).replace(chr(10),' ')[:300]}",
-                file=__import__("sys").stderr,
-                flush=True,
-            )
+            print(f"DEBUG search source={source} REQUEST_EXCEPTION={type(e).__name__}: {str(e).replace(chr(10),' ')[:300]}",file=__import__("sys").stderr,flush=True)
             pass
     return SearchResult([],aggregate)
