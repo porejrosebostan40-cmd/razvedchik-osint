@@ -6,34 +6,29 @@ import requests
 
 REGION = sys.argv[1] if len(sys.argv) > 1 else "РСО–Алания"
 QUERY = f"мобилизация заключенных ФСИН {REGION}"
+URL = "https://api.search.tinyfish.ai"
 
 
-def main() -> int:
-    key = os.environ.get("TINYFISH_API_KEY")
-    if not key:
-        print("TINYFISH_API_KEY missing")
-        return 1
-
-    r = requests.get(
-        "https://api.search.tinyfish.ai",
+def run_search(key: str, **params):
+    return requests.get(
+        URL,
         headers={"X-API-Key": key},
-        params={
-            "query": QUERY,
-            "location": "RU",
-            "language": "ru",
-        },
+        params={"query": QUERY, "location": "RU", "language": "ru", **params},
         timeout=30,
     )
 
-    print(f"HTTP {r.status_code}")
-    if r.status_code != 200:
-        print(f"BODY: {r.text[:2000]}")
+
+def print_results(label: str, response) -> int:
+    print(f"\n=== {label} ===")
+    print(f"HTTP {response.status_code}")
+    if response.status_code != 200:
+        print(f"BODY: {response.text[:2000]}")
         return 1
 
     try:
-        data = r.json()
+        data = response.json()
     except ValueError:
-        print(f"BODY: {r.text[:5000]}")
+        print(f"BODY: {response.text[:5000]}")
         return 1
 
     results = data.get("results", [])
@@ -53,7 +48,28 @@ def main() -> int:
         print(f"url:   {item.get('url')}")
         print(f"site:  {item.get('site_name')}")
         print(f"date:  {item.get('date')}")
-        print(f"snip:  {(item.get('snippet') or '')[:120]}")
+        print(f"publisher: {item.get('publisher')}")
+        print(f"snip:  {(item.get('snippet') or '')[:160]}")
+
+    return 0
+
+
+def main() -> int:
+    key = os.environ.get("TINYFISH_API_KEY")
+    if not key:
+        print("TINYFISH_API_KEY missing")
+        return 1
+
+    rc = print_results("WITHOUT_DOMAIN_FILTER", run_search(key))
+    if rc:
+        return rc
+
+    rc = print_results(
+        "WITH_MIL_RU_FILTER",
+        run_search(key, include_domains="mil.ru"),
+    )
+    if rc:
+        return rc
 
     return 0
 
