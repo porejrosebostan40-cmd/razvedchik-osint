@@ -1,0 +1,25 @@
+name: Exa vs current search comparison
+
+on:
+  push:
+    branches:
+      - "test/exa-vs-search"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  compare:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install dependencies
+        run: python3 -m pip install -e .
+
+      - name: Run comparison
+        env:
+          EXA_API_KEY: ${{ secrets.EXA_API_KEY }}
+        run: |
+          python3 scripts/exa_vs_search_test.py
