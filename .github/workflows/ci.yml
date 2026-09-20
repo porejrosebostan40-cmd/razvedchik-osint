@@ -2,7 +2,7 @@ name: CI
 
 on:
   push:
-    branches: [main]
+    branches: [main, test/exa-vs-search]
   pull_request:
     branches: [main]
 
@@ -29,3 +29,13 @@ jobs:
         env:
           EXA_API_KEY: ${{ secrets.EXA_API_KEY }}
         run: python3 scripts/exa_vs_search_test.py
+
+  exa-event-gate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: python -m pip install --upgrade pip && pip install .
+      - name: Run Exa event gate
+        env:
+          EXA_API_KEY: ${{ secrets.EXA_API_KEY }}
+        run: python3 scripts/exa_event_gate_test.py
