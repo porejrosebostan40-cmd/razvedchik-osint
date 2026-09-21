@@ -191,6 +191,7 @@ def main():
         snippet_events.append(item)
         row = {
             **item,
+            "domain": urlparse(item["url"]).netloc.lower().split(":")[0].removeprefix("www."),
             "scrape_status": result["status"],
             "http_status": result["http_status"],
             "elapsed_ms": result["elapsed_ms"],
