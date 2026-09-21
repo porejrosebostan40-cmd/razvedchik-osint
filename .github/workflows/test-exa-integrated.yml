@@ -1,0 +1,30 @@
+name: Exa integrated search smoke
+
+on:
+  push:
+    branches:
+      - test/exa-search-smoke
+
+jobs:
+  smoke:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Install package
+        run: pip install -e .
+      - name: Run integrated Exa smoke
+        env:
+          EXA_API_KEY: ${{ secrets.EXA_API_KEY }}
+        run: python scripts/test_exa_integrated.py
+      - name: Upload result
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: exa-integrated-smoke
+          path: /tmp/exa_integrated_smoke.json
+          if-no-files-found: ignore
