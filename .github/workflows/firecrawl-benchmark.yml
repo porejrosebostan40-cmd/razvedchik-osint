@@ -6,6 +6,7 @@ on:
     branches:
       - bench/firecrawl-scrape
 
+# Triggered automatically on this isolated benchmark branch.
 jobs:
   benchmark:
     runs-on: ubuntu-latest
