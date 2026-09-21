@@ -152,9 +152,8 @@ def extract_relevant(markdown):
         has_anchor = term_hit(sentence, MILITARY_ANCHORS)
         negative = _is_negative({"title": "", "snippet": sentence})
 
-        # A deliberately strict first test:
-        # keep only self-contained positive claims with target + action.
-        if not has_target or not has_action or negative:
+        # Option D: negation is evidence metadata, not an extraction filter.
+        if not has_target or not has_action:
             continue
 
         key = low
@@ -167,6 +166,7 @@ def extract_relevant(markdown):
                 "target": has_target,
                 "action": has_action,
                 "military_anchor": has_anchor,
+                "has_negative": negative,
             }
         )
 
@@ -360,8 +360,8 @@ def main():
     report = {
         "queries": QUERIES,
         "method": {
-            "type": "rule_based_sentence_extraction",
-            "rule": "select positive sentences containing target + action; run production predicates on extracted compact event",
+            "type": "rule_based_sentence_extraction_option_D",
+            "rule": "select target + action sentences regardless of negation; retain has_negative as evidence metadata; run production predicates on extracted compact event",
             "max_chars": MAX_EXTRACT_CHARS,
         },
         "summary": summary,
