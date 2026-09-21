@@ -42,7 +42,7 @@ MILITARY_ANCHORS = (
     "вооруженные силы", "вооружённые силы",
 )
 
-SENTENCE_RE = re.compile(r"(?<=[.!?…])\\s+|(?<=; )(?=[А-ЯЁ])")
+SENTENCE_RE = re.compile(r"(?<=[.!?…])\s+|(?<=; )(?=[А-ЯЁ])")
 
 
 def exa_search(query):
@@ -129,9 +129,9 @@ def scrape(url):
 
 
 def split_sentences(markdown):
-    text = re.sub(r"(?m)^#{1,6}\\s*", "", markdown or "")
-    text = re.sub(r"\\[([^\\]]+)\\]\\((?:https?://|/)[^)]*\\)", r"\\1", text)
-    text = re.sub(r"\\s+", " ", text).strip()
+    text = re.sub(r"(?m)^#{1,6}\s*", "", markdown or "")
+    text = re.sub(r"\[([^\]]+)\]\((?:https?://|/)[^)]*\)", r"\1", text)
+    text = re.sub(r"\s+", " ", text).strip()
     return [s.strip(" \\t-•*") for s in SENTENCE_RE.split(text) if s.strip()]
 
 
