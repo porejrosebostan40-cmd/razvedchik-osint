@@ -10,7 +10,7 @@ on:
 jobs:
   benchmark:
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    timeout-minutes: 30
     env:
       EXA_API_KEY: ${{ secrets.EXA_API_KEY }}
       FIRECRAWL_API_KEY: ${{ secrets.FIRECRAWL_API_KEY }}
@@ -21,7 +21,10 @@ jobs:
           python-version: "3.11"
       - run: pip install -e .
       - run: python scripts/firecrawl_benchmark.py
+      - run: python scripts/bench_extract_vs_fulltext.py
       - uses: actions/upload-artifact@v4
         with:
           name: firecrawl-benchmark
-          path: firecrawl_benchmark_report.json
+          path: |
+            firecrawl_benchmark_report.json
+            firecrawl_extraction_benchmark_report.json
