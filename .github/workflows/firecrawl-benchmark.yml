@@ -8,6 +8,7 @@ on:
 
 # Triggered automatically on this isolated benchmark branch.
 # Manual-run equivalent: this push intentionally starts the benchmark.
+# Determinism check A/B: trigger-only comment, no production code change.
 jobs:
   benchmark:
     runs-on: ubuntu-latest
