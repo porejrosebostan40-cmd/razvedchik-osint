@@ -7,6 +7,7 @@ on:
       - bench/firecrawl-scrape
 
 # Triggered automatically on this isolated benchmark branch.
+# Manual-run equivalent: this push intentionally starts the benchmark.
 jobs:
   benchmark:
     runs-on: ubuntu-latest
