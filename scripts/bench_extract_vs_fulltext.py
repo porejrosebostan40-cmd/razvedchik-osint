@@ -22,8 +22,8 @@ QUERIES = [
 
 EXA_URL = "https://api.exa.ai/search"
 FIRECRAWL_URL = "https://api.firecrawl.dev/v1/scrape"
-MAX_PER_QUERY = 10
-MAX_URLS = 30
+MAX_PER_QUERY = 5
+MAX_URLS = 15
 MAX_EXTRACT_CHARS = 1800
 
 TARGET_TERMS = (
@@ -226,6 +226,7 @@ def main():
     extracted_events = []
 
     for idx, item in enumerate(urls, 1):
+        time.sleep(2.0)
         print(f"EXTRACT {idx}/{len(urls)} {item['url']}")
         result = scrape(item["url"])
         markdown = result.get("markdown") or ""
