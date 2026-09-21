@@ -1,0 +1,30 @@
+name: Benchmark Firecrawl vs Exa
+
+on:
+  push:
+    branches:
+      - bench/firecrawl-vs-exa
+  workflow_dispatch:
+
+jobs:
+  benchmark:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Install requests
+        run: pip install requests
+      - name: Run benchmark
+        env:
+          EXA_API_KEY: ${{ secrets.EXA_API_KEY }}
+          FIRECRAWL_API_KEY: ${{ secrets.FIRECRAWL_API_KEY }}
+        run: python scripts/benchmark_firecrawl_vs_exa.py
+      - name: Upload benchmark
+        uses: actions/upload-artifact@v4
+        with:
+          name: firecrawl-vs-exa
+          path: /tmp/firecrawl_vs_exa.json
