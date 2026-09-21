@@ -6,7 +6,8 @@ from urllib.parse import urlparse
 
 import requests
 
-from riskwatch.forecast import ACTION_TERMS, NEGATIVE_TERMS, TARGET_TERMS, _is_negative
+from riskwatch.evidence import build_evidence_graph
+from riskwatch.forecast import _has_direct_military_action, _has_target
 
 QUERIES = [
     ("Q1", "мобилизация заключенных ФСИН РСО-Алания"),
@@ -38,23 +39,48 @@ def exa_search(query):
     return r.json().get("results") or []
 
 
-def norm(text):
-    return str(text or "").lower()
+def event_from_exa(item, query_id, query):
+    return {
+        "query_id": query_id,
+        "query": query,
+        "url": item.get("url") or "",
+        "title": item.get("title") or "",
+        "snippet": item.get("highlight") or item.get("snippet") or "",
+        "published_date": item.get("publishedDate") or item.get("published_date"),
+        "author": item.get("author"),
+    }
 
 
-def has_target_text(text):
-    t = norm(text)
-    return any(term in t for term in TARGET_TERMS)
+def event_with_full_text(item, markdown, metadata):
+    return {
+        **item,
+        "title": metadata.get("title") or item.get("title") or "",
+        "snippet": markdown,
+        "published_date": (
+            metadata.get("publishedTime")
+            or metadata.get("publishedDate")
+            or item.get("published_date")
+        ),
+        "author": metadata.get("author") or item.get("author"),
+    }
 
 
-def has_action_text(text):
-    t = norm(text)
-    return has_target_text(t) and any(term in t for term in ACTION_TERMS) and not any(term in t for term in NEGATIVE_TERMS)
-
-
-def exa_event_match(item):
-    text = f"{item.get('title','')} {item.get('highlight','')} {item.get('snippet','')}"
-    return has_target_text(text), has_action_text(text)
+def semantic_metrics(events):
+    events = list(events or [])
+    target = [e for e in events if _has_target(e)]
+    direct = [e for e in events if _has_direct_military_action(e)]
+    graph = build_evidence_graph(events)
+    return {
+        "events": len(events),
+        "target_events": len(target),
+        "direct_action_events": len(direct),
+        "root_events": len(direct),
+        "graph_nodes": graph["metrics"]["nodes"],
+        "graph_edges": graph["metrics"]["edges"],
+        "graph_root_nodes": graph["metrics"]["root_nodes"],
+        "graph_chain_score": graph["metrics"]["chain_score"],
+        "graph": graph,
+    }
 
 
 def scrape(url):
@@ -63,7 +89,10 @@ def scrape(url):
     try:
         r = requests.post(
             FIRECRAWL_URL,
-            headers={"Authorization": f"Bearer {key}", "Content-Type": "application/json"},
+            headers={
+                "Authorization": f"Bearer {key}",
+                "Content-Type": "application/json",
+            },
             json={
                 "url": url,
                 "formats": ["markdown"],
@@ -108,8 +137,17 @@ def scrape(url):
 
 
 def cleanliness(markdown):
-    t = norm(markdown)
-    nav_markers = ["cookie", "privacy policy", "sign in", "log in", "subscribe", "menu", "advertisement", "all rights reserved"]
+    t = str(markdown or "").lower()
+    nav_markers = [
+        "cookie",
+        "privacy policy",
+        "sign in",
+        "log in",
+        "subscribe",
+        "menu",
+        "advertisement",
+        "all rights reserved",
+    ]
     nav_hits = sum(1 for x in nav_markers if x in t)
     headings = len(re.findall(r"(?m)^#{1,6}\s+", markdown or ""))
     paragraphs = len([x for x in re.split(r"\n\s*\n", markdown or "") if x.strip()])
@@ -133,32 +171,24 @@ def main():
             if not url or url in seen:
                 continue
             seen.add(url)
-            target, action = exa_event_match(item)
-            urls.append({
-                "query_id": qid,
-                "query": query,
-                "url": url,
-                "domain": urlparse(url).netloc.lower().removeprefix("www."),
-                "title": item.get("title") or "",
-                "snippet": item.get("highlight") or item.get("snippet") or "",
-                "published_date": item.get("publishedDate") or item.get("published_date"),
-                "author": item.get("author"),
-                "exa_target": target,
-                "exa_action": action,
-            })
+            urls.append(event_from_exa(item, qid, query))
             if len(urls) >= MAX_URLS:
                 break
         if len(urls) >= MAX_URLS:
             break
 
     rows = []
+    snippet_events = []
+    full_events = []
+
     for idx, item in enumerate(urls, 1):
         print(f"SCRAPE {idx}/{len(urls)} {item['url']}")
         result = scrape(item["url"])
         markdown = result.get("markdown") or ""
         meta = result.get("metadata") or {}
         clean = cleanliness(markdown)
-        full_text = f"{meta.get('title','')}\n{markdown}"
+
+        snippet_events.append(item)
         row = {
             **item,
             "scrape_status": result["status"],
@@ -170,32 +200,95 @@ def main():
             "firecrawl_title": meta.get("title"),
             "firecrawl_published_date": meta.get("publishedTime") or meta.get("publishedDate"),
             "firecrawl_author": meta.get("author"),
-            "firecrawl_target": has_target_text(full_text),
-            "firecrawl_action": has_action_text(full_text),
             **clean,
         }
+
+        if result["status"] == "ok":
+            full_event = event_with_full_text(item, markdown, meta)
+            full_events.append(full_event)
+            row["full_target"] = _has_target(full_event)
+            row["full_direct_action"] = _has_direct_military_action(full_event)
+        else:
+            row["full_target"] = None
+            row["full_direct_action"] = None
         rows.append(row)
+
+    snippet_sem = semantic_metrics(snippet_events)
+    full_sem = semantic_metrics(full_events)
 
     ok = [r for r in rows if r["scrape_status"] == "ok"]
     failed = [r for r in rows if r["scrape_status"] != "ok"]
+
+    uplift_target = []
+    uplift_direct = []
+    for r in ok:
+        snippet_event = {
+            "url": r["url"],
+            "title": r["title"],
+            "snippet": r["snippet"],
+        }
+        if (not _has_target(snippet_event)) and r["full_target"]:
+            uplift_target.append(r)
+        if (not _has_direct_military_action(snippet_event)) and r["full_direct_action"]:
+            uplift_direct.append(r)
+
     summary = {
         "total_urls": len(rows),
         "scrape_ok": len(ok),
         "scrape_failed": len(failed),
-        "date_found_exa": sum(bool(r.get("published_date")) for r in rows),
-        "date_found_firecrawl": sum(bool(r.get("firecrawl_published_date")) for r in ok),
-        "author_found_exa": sum(bool(r.get("author")) for r in rows),
-        "author_found_firecrawl": sum(bool(r.get("firecrawl_author")) for r in ok),
-        "target_events_with_snippet": sum(bool(r["exa_target"]) for r in rows),
-        "target_events_with_full_text": sum(bool(r["firecrawl_target"]) for r in ok),
-        "action_events_with_snippet": sum(bool(r["exa_action"]) for r in rows),
-        "action_events_with_full_text": sum(bool(r["firecrawl_action"]) for r in ok),
-        "new_target_positives": sum((not r["exa_target"]) and r["firecrawl_target"] for r in ok),
-        "new_action_positives": sum((not r["exa_action"]) and r["firecrawl_action"] for r in ok),
-        "avg_markdown_kb_ok": round(sum(r["markdown_kb"] for r in ok) / len(ok), 2) if ok else 0,
-        "domains_failed": sorted({r["domain"] for r in failed}),
+        "scrape_success_rate": round(len(ok) / len(rows) * 100, 1) if rows else 0,
+        "snippet": {
+            "events": snippet_sem["events"],
+            "target_events": snippet_sem["target_events"],
+            "direct_action_events": snippet_sem["direct_action_events"],
+            "root_events": snippet_sem["root_events"],
+            "graph_nodes": snippet_sem["graph_nodes"],
+            "graph_edges": snippet_sem["graph_edges"],
+            "graph_root_nodes": snippet_sem["graph_root_nodes"],
+            "graph_chain_score": snippet_sem["graph_chain_score"],
+        },
+        "full_text": {
+            "events": full_sem["events"],
+            "target_events": full_sem["target_events"],
+            "direct_action_events": full_sem["direct_action_events"],
+            "root_events": full_sem["root_events"],
+            "graph_nodes": full_sem["graph_nodes"],
+            "graph_edges": full_sem["graph_edges"],
+            "graph_root_nodes": full_sem["graph_root_nodes"],
+            "graph_chain_score": full_sem["graph_chain_score"],
+        },
+        "uplift": {
+            "new_target_events": len(uplift_target),
+            "new_direct_action_events": len(uplift_direct),
+            "target_delta": full_sem["target_events"] - snippet_sem["target_events"],
+            "direct_action_delta": full_sem["direct_action_events"] - snippet_sem["direct_action_events"],
+            "root_delta": full_sem["root_events"] - snippet_sem["root_events"],
+            "graph_node_delta": full_sem["graph_nodes"] - snippet_sem["graph_nodes"],
+            "graph_root_node_delta": full_sem["graph_root_nodes"] - snippet_sem["graph_root_nodes"],
+            "graph_chain_score_delta": full_sem["graph_chain_score"] - snippet_sem["graph_chain_score"],
+        },
+        "metadata": {
+            "date_found_snippet": sum(bool(r.get("published_date")) for r in rows),
+            "date_found_firecrawl": sum(bool(r.get("firecrawl_published_date")) for r in ok),
+            "author_found_snippet": sum(bool(r.get("author")) for r in rows),
+            "author_found_firecrawl": sum(bool(r.get("firecrawl_author")) for r in ok),
+        },
+        "cleanliness": {
+            "avg_markdown_kb_ok": round(sum(r["markdown_kb"] for r in ok) / len(ok), 2) if ok else 0,
+            "avg_nav_marker_hits_ok": round(sum(r["nav_marker_hits"] for r in ok) / len(ok), 2) if ok else 0,
+            "avg_headings_ok": round(sum(r["headings"] for r in ok) / len(ok), 2) if ok else 0,
+            "avg_paragraph_blocks_ok": round(sum(r["paragraph_blocks"] for r in ok) / len(ok), 2) if ok else 0,
+        },
+        "failed_domains": sorted({r["domain"] for r in failed}),
     }
-    report = {"queries": QUERIES, "summary": summary, "rows": rows}
+
+    report = {
+        "queries": QUERIES,
+        "summary": summary,
+        "rows": rows,
+        "snippet_graph": snippet_sem["graph"],
+        "full_text_graph": full_sem["graph"],
+    }
     with open("firecrawl_benchmark_report.json", "w", encoding="utf-8") as f:
         json.dump(report, f, ensure_ascii=False, indent=2)
 
