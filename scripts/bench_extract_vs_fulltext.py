@@ -226,9 +226,16 @@ def main():
     extracted_events = []
 
     for idx, item in enumerate(urls, 1):
-        time.sleep(2.0)
+        time.sleep(8.0)
         print(f"EXTRACT {idx}/{len(urls)} {item['url']}")
         result = scrape(item["url"])
+        retries = 0
+        while result.get("http_status") == 429 and retries < 3:
+            wait_s = 15 * (2 ** retries)
+            print(f"RATE_LIMIT retry={retries + 1} wait={wait_s}s")
+            time.sleep(wait_s)
+            result = scrape(item["url"])
+            retries += 1
         markdown = result.get("markdown") or ""
         meta = result.get("metadata") or {}
 
