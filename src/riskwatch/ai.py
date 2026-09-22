@@ -136,11 +136,15 @@ def analyze(events,forecast,evidence_graph=None):
         forecast['evidence_chain']=compact_chain(evidence_graph or {})
     except Exception as e:
         forecast['evidence_chain']={'version':2,'metrics':{},'support_edges':[],'contradiction_edges':[],'fingerprint':'','error':type(e).__name__}
-    if not SETTINGS.openai_api_key:return _fallback(events,'OPENAI_API_KEY is not configured',forecast)
+    if not ((SETTINGS.freellmapi_base_url and SETTINGS.freellmapi_api_key) or SETTINGS.openai_api_key):return _fallback(events,'Neither FREELLMAPI_API_KEY nor OPENAI_API_KEY is configured',forecast)
     compact=_compact_events(events); context={'scenario_id':SCENARIO_ID,'scenario_question':SCENARIO_QUESTION,'pattern':{k:v for k,v in forecast.items() if k!='_events'},'evidence_chain':forecast.get('evidence_chain',{}),'events':compact}
-    payload={'model':SETTINGS.openai_model,'instructions':SYSTEM,'input':'Return only JSON. Analyze only the evidence below. '+json.dumps(context,ensure_ascii=False,separators=(',',':')),'text':{'format':{'type':'json_object'}},'max_output_tokens':500,'store':False}
+    use_freellmapi = bool(SETTINGS.freellmapi_base_url and SETTINGS.freellmapi_api_key)
+    api_key = SETTINGS.freellmapi_api_key if use_freellmapi else SETTINGS.openai_api_key
+    base_url = SETTINGS.freellmapi_base_url.rstrip("/") if use_freellmapi else "https://api.openai.com/v1"
+    model = SETTINGS.freellmapi_model if use_freellmapi else SETTINGS.openai_model
+    payload={'model':model,'instructions':SYSTEM,'input':'Return only JSON. Analyze only the evidence below. '+json.dumps(context,ensure_ascii=False,separators=(',',':')),'text':{'format':{'type':'json_object'}},'max_output_tokens':500,'store':False}
     try:
-        r=requests.post('https://api.openai.com/v1/responses',headers={'Authorization':f'Bearer {SETTINGS.openai_api_key}','Content-Type':'application/json'},json=payload,timeout=60); r.raise_for_status(); response=r.json(); usage=response.get('usage',{}) or {}; result=_extract_json(_response_text(response))
+        r=requests.post(f"{base_url}/responses",headers={'Authorization':f'Bearer {api_key}','Content-Type':'application/json'},json=payload,timeout=60); r.raise_for_status(); response=r.json(); usage=response.get('usage',{}) or {}; result=_extract_json(_response_text(response))
         if not isinstance(result,dict):raise ValueError('model JSON is not object')
         result.setdefault('decision','WATCH'); result.setdefault('reason','OpenAI analysis completed')
         print(f"DEBUG: AI raw verdict={result.get('verdict')!r}")
@@ -195,11 +199,15 @@ FILTER_SYSTEM = """Ты фильтр результатов поиска для 
 
 
 def _call_openai(system: str, user: str, max_tokens: int = 500) -> dict:
-    """Унифицированный вызов OpenAI Responses API."""
-    if not SETTINGS.openai_api_key:
-        raise RuntimeError("OPENAI_API_KEY is not configured")
+    """Вызов Responses API: через локальный FreeLLMAPI, если он настроен, иначе напрямую OpenAI."""
+    use_freellmapi = bool(SETTINGS.freellmapi_base_url and SETTINGS.freellmapi_api_key)
+    api_key = SETTINGS.freellmapi_api_key if use_freellmapi else SETTINGS.openai_api_key
+    base_url = SETTINGS.freellmapi_base_url.rstrip("/") if use_freellmapi else "https://api.openai.com/v1"
+    model = SETTINGS.freellmapi_model if use_freellmapi else SETTINGS.openai_model
+    if not api_key:
+        raise RuntimeError("Neither FREELLMAPI_API_KEY nor OPENAI_API_KEY is configured")
     payload = {
-        "model": SETTINGS.openai_model,
+        "model": model,
         "instructions": system,
         "input": user,
         "text": {"format": {"type": "json_object"}},
@@ -207,9 +215,9 @@ def _call_openai(system: str, user: str, max_tokens: int = 500) -> dict:
         "store": False,
     }
     r = requests.post(
-        "https://api.openai.com/v1/responses",
+        f"{base_url}/responses",
         headers={
-            "Authorization": f"Bearer {SETTINGS.openai_api_key}",
+            "Authorization": f"Bearer {api_key}",
             "Content-Type": "application/json",
         },
         json=payload,
@@ -218,7 +226,6 @@ def _call_openai(system: str, user: str, max_tokens: int = 500) -> dict:
     r.raise_for_status()
     response = r.json()
     return _extract_json(_response_text(response))
-
 
 def plan_queries(region: str, scenario: str = "prisoner_mobilization") -> list:
     """AI-планировщик: генерирует 4-6 коротких запросов для региона."""
