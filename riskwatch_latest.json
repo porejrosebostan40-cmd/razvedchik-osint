@@ -1,3 +1,6 @@
+DEBUG: AI raw verdict='undetermined'
+DEBUG: calling _save_ai_debug, reason='AI undetermined response contained claims; rejected'
+DEBUG: after _save_ai_debug, file exists=True
 {
   "scenario_question": "Будут ли мужчин из мест лишения свободы, прежде всего из исправительных колоний, мобилизовывать/привлекать к военной службе после 20 сентября 2026 года?",
   "scenario_answer": "UNKNOWN",
@@ -14,7 +17,7 @@
   "model_risk": 0,
   "confidence": 0,
   "analysis_provider": "fallback",
-  "reason": "OpenAI HTTP failure: 429 {\n  \"error\": {\n    \"message\": \"Rate limit reached for gpt-5.6-luna in organization org-MYHgoY7mWZFMbaJpA0Uo7t70 on tokens per min (TPM): Limit 100000, Used 100000, Requested 1014. Please try again in 7h18m2.88s. Visit https://platform.openai.com/account/rate-limits to learn more. You can increase yo",
+  "reason": "AI undetermined response contained claims; rejected",
   "signals": [
     "pattern_stage=0",
     "structure_score=8"
