@@ -5,6 +5,9 @@ import os
 class Settings:
     openai_api_key: str = os.getenv("OPENAI_API_KEY", "")
     openai_model: str = os.getenv("OPENAI_MODEL", "gpt-5.6-luna")
+    freellmapi_base_url: str = os.getenv("FREELLMAPI_BASE_URL", "")
+    freellmapi_api_key: str = os.getenv("FREELLMAPI_API_KEY", "")
+    freellmapi_model: str = os.getenv("FREELLMAPI_MODEL", "auto")
     telegram_token: str = os.getenv("TELEGRAM_BOT_TOKEN", "")
     telegram_chat_id: str = os.getenv("TELEGRAM_CHAT_ID", "")
     max_results_per_query: int = int(os.getenv("MAX_RESULTS_PER_QUERY", "6"))
