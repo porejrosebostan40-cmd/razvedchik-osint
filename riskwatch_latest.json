@@ -6,8 +6,8 @@
   "probability_calibration": {
     "probability": 1.4,
     "status": "preliminary",
-    "sample": 71,
-    "bin_sample": 71,
+    "sample": 72,
+    "bin_sample": 72,
     "raw": 0,
     "horizon": "24-72h"
   },
@@ -76,7 +76,7 @@
       "regions_planned": 1,
       "queries_generated": 4,
       "queries_executed": 4,
-      "raw_results": 39,
+      "raw_results": 40,
       "after_search_url_filter": 24,
       "after_site_filter": 24,
       "after_ai_filter": 0,
@@ -88,7 +88,7 @@
     }
   },
   "calibration": {
-    "resolved": 86,
+    "resolved": 87,
     "base_rate": 0.0,
     "brier": 0.0,
     "issued_brier": 0.000193,
@@ -97,7 +97,7 @@
     "calibration": [
       {
         "range": "0-9",
-        "n": 86,
+        "n": 87,
         "empirical_rate": 0.0
       }
     ],
@@ -120,7 +120,7 @@
     "contradiction_edges": [],
     "fingerprint": "c42037672a9f0cd2"
   },
-  "forecast_basis": "PATTERN_ENGINE\nscenario_id=prisoner_mobilization\npattern_stage=4\npattern_stage_name=operational_implementation\nobserved_stages=['legal_or_policy_signal', 'administrative_preparation', 'operational_implementation']\nnext_stage=root_scenario\nnext_event_horizon=24-72h\nindependent_domains=7\nsource_families=7\nregions_with_signals=2\nacceleration=0.17\nstructure_score=59\nevidence_score=80\nevidence_metrics={'score': 80, 'target_events': 16, 'action_events': 5, 'independent_domains': 7, 'source_families': 7, 'primary_events': 8, 'negative_indicators': 0}\nnegative_indicators=0\ninterpretation=ordered multi-stage chain is forming\nevidence_chain={'version': 2, 'metrics': {'nodes': 16, 'edges': 0, 'source_families': 7, 'primary_nodes': 8, 'root_nodes': 0, 'ordered_support_edges': 0, 'contradictions': 0, 'regions_with_signals': 2, 'chain_score': 51}, 'support_edges': [], 'contradiction_edges': [], 'fingerprint': 'c42037672a9f0cd2'}\nretrieval={'regions_planned': 1, 'queries_generated': 4, 'queries_executed': 4, 'raw_results': 39, 'after_search_url_filter': 24, 'after_site_filter': 24, 'after_ai_filter': 0, 'events_added': 0, 'regional_cursor': 39, 'regional_cycle': 0, 'regional_batch_wrapped': False, 'regional_collection_failed': False}\nCALIBRATION={'resolved': 86, 'base_rate': 0.0, 'brier': 0.0, 'issued_brier': 0.000193, 'brier_skill_score': None, 'issued_brier_skill_score': None, 'calibration': [{'range': '0-9', 'n': 86, 'empirical_rate': 0.0}], 'calibration_status': 'preliminary'}\nstructure_score and evidence_score are evidence-strength measures, not probabilities; root probability requires temporal historical calibration.",
+  "forecast_basis": "PATTERN_ENGINE\nscenario_id=prisoner_mobilization\npattern_stage=4\npattern_stage_name=operational_implementation\nobserved_stages=['legal_or_policy_signal', 'administrative_preparation', 'operational_implementation']\nnext_stage=root_scenario\nnext_event_horizon=24-72h\nindependent_domains=7\nsource_families=7\nregions_with_signals=2\nacceleration=0.17\nstructure_score=59\nevidence_score=80\nevidence_metrics={'score': 80, 'target_events': 16, 'action_events': 5, 'independent_domains': 7, 'source_families': 7, 'primary_events': 8, 'negative_indicators': 0}\nnegative_indicators=0\ninterpretation=ordered multi-stage chain is forming\nevidence_chain={'version': 2, 'metrics': {'nodes': 16, 'edges': 0, 'source_families': 7, 'primary_nodes': 8, 'root_nodes': 0, 'ordered_support_edges': 0, 'contradictions': 0, 'regions_with_signals': 2, 'chain_score': 51}, 'support_edges': [], 'contradiction_edges': [], 'fingerprint': 'c42037672a9f0cd2'}\nretrieval={'regions_planned': 1, 'queries_generated': 4, 'queries_executed': 4, 'raw_results': 40, 'after_search_url_filter': 24, 'after_site_filter': 24, 'after_ai_filter': 0, 'events_added': 0, 'regional_cursor': 39, 'regional_cycle': 0, 'regional_batch_wrapped': False, 'regional_collection_failed': False}\nCALIBRATION={'resolved': 87, 'base_rate': 0.0, 'brier': 0.0, 'issued_brier': 0.000193, 'brier_skill_score': None, 'issued_brier_skill_score': None, 'calibration': [{'range': '0-9', 'n': 87, 'empirical_rate': 0.0}], 'calibration_status': 'preliminary'}\nstructure_score and evidence_score are evidence-strength measures, not probabilities; root probability requires temporal historical calibration.",
   "analytical_status": "FAILED_AI",
   "hallucination_guard": "fallback_no_claim_without_evidence"
 }
