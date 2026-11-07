@@ -1,13 +1,13 @@
 {
   "scenario_question": "Будут ли мужчин из мест лишения свободы, прежде всего из исправительных колоний, мобилизовывать/привлекать к военной службе после 20 сентября 2026 года?",
   "scenario_answer": "UNKNOWN",
-  "probability": 16.5,
+  "probability": 16.4,
   "model_probability": 0,
   "probability_calibration": {
-    "probability": 16.5,
+    "probability": 16.4,
     "status": "measured",
-    "sample": 119,
-    "bin_sample": 119,
+    "sample": 120,
+    "bin_sample": 120,
     "raw": 0,
     "horizon": "24-72h"
   },
@@ -40,19 +40,19 @@
     ],
     "next_stage": "root_scenario",
     "next_event_horizon": "24-72h",
-    "independent_domains": 52,
-    "source_families": 52,
+    "independent_domains": 53,
+    "source_families": 53,
     "regions_with_signals": 2,
     "negative_indicators": 2,
-    "acceleration": 0.05,
+    "acceleration": 0.09,
     "structure_score": 47,
     "evidence_score": 94,
     "evidence_metrics": {
       "score": 94,
-      "target_events": 89,
-      "action_events": 45,
-      "independent_domains": 52,
-      "source_families": 52,
+      "target_events": 90,
+      "action_events": 46,
+      "independent_domains": 53,
+      "source_families": 53,
       "primary_events": 14,
       "negative_indicators": 2
     },
@@ -60,9 +60,9 @@
     "evidence_chain": {
       "version": 2,
       "metrics": {
-        "nodes": 89,
+        "nodes": 90,
         "edges": 40,
-        "source_families": 52,
+        "source_families": 53,
         "primary_nodes": 14,
         "root_nodes": 2,
         "ordered_support_edges": 40,
@@ -157,7 +157,7 @@
         }
       ],
       "contradiction_edges": [],
-      "fingerprint": "95bc06f0a1178c72"
+      "fingerprint": "a62cc368329e9cae"
     },
     "retrieval": {
       "regions_planned": 1,
@@ -167,7 +167,7 @@
       "after_search_url_filter": 24,
       "after_site_filter": 24,
       "after_ai_filter": 17,
-      "events_added": 0,
+      "events_added": 1,
       "regional_cursor": 39,
       "regional_cycle": 0,
       "regional_batch_wrapped": false,
@@ -175,12 +175,12 @@
     }
   },
   "calibration": {
-    "resolved": 145,
-    "base_rate": 14.48,
-    "brier": 0.144828,
-    "issued_brier": 0.132392,
-    "brier_skill_score": -0.169358,
-    "issued_brier_skill_score": -0.068948,
+    "resolved": 146,
+    "base_rate": 14.38,
+    "brier": 0.143836,
+    "issued_brier": 0.131695,
+    "brier_skill_score": -0.168003,
+    "issued_brier_skill_score": -0.069414,
     "calibration": [
       {
         "range": "0-9",
@@ -189,8 +189,8 @@
       },
       {
         "range": "10-19",
-        "n": 20,
-        "empirical_rate": 40.0
+        "n": 21,
+        "empirical_rate": 38.1
       }
     ],
     "calibration_status": "measured"
@@ -198,9 +198,9 @@
   "evidence_chain": {
     "version": 2,
     "metrics": {
-      "nodes": 89,
+      "nodes": 90,
       "edges": 40,
-      "source_families": 52,
+      "source_families": 53,
       "primary_nodes": 14,
       "root_nodes": 2,
       "ordered_support_edges": 40,
@@ -295,9 +295,9 @@
       }
     ],
     "contradiction_edges": [],
-    "fingerprint": "95bc06f0a1178c72"
+    "fingerprint": "a62cc368329e9cae"
   },
-  "forecast_basis": "PATTERN_ENGINE\nscenario_id=prisoner_mobilization\npattern_stage=5\npattern_stage_name=root_scenario\nobserved_stages=['legal_or_policy_signal', 'administrative_preparation', 'organizational_or_logistical_action', 'operational_implementation', 'root_scenario']\nnext_stage=root_scenario\nnext_event_horizon=24-72h\nindependent_domains=52\nsource_families=52\nregions_with_signals=2\nacceleration=0.05\nstructure_score=47\nevidence_score=94\nevidence_metrics={'score': 94, 'target_events': 89, 'action_events': 45, 'independent_domains': 52, 'source_families': 52, 'primary_events': 14, 'negative_indicators': 2}\nnegative_indicators=2\ninterpretation=ordered multi-stage chain is forming\nevidence_chain={'version': 2, 'metrics': {'nodes': 89, 'edges': 40, 'source_families': 52, 'primary_nodes': 14, 'root_nodes': 2, 'ordered_support_edges': 40, 'contradictions': 10, 'regions_with_signals': 2, 'chain_score': 61}, 'support_edges': [{'from': 'df9fad9ef995843a', 'to': 'f9163a405f644d36', 'type': 'corroboration', 'stage_from': 0, 'stage_to': 1}, {'from': 'df9fad9ef995843a', 'to': 'f66ceb31c399e317', 'type': 'corroboration', 'stage_from': 0, 'stage_to': 1}, {'from': '48bb002634dba8f5', 'to': 'f9163a405f644d36', 'type': 'corroboration', 'stage_from': 0, 'stage_to': 1}, {'from': '48bb002634dba8f5', 'to': 'f66ceb31c399e317', 'type': 'corroboration', 'stage_from': 0, 'stage_to': 1}, {'from': 'dbd26dcfbe54e180', 'to': '0134727f53d73f34', 'type': 'corroboration', 'stage_from': 0, 'stage_to': 1}, {'from': '644132363c90b790', 'to': 'f9163a405f644d36', 'type': 'corroboration', 'stage_from': 0, 'stage_to': 1}, {'from': '644132363c90b790', 'to': 'f66ceb31c399e317', 'type': 'corroboration', 'stage_from': 0, 'stage_to': 1}, {'from': 'df9fad9ef995843a', 'to': '1a92ceab75d70993', 'type': 'corroboration', 'stage_from': 0, 'stage_to': 2}, {'from': '48bb002634dba8f5', 'to': '1a92ceab75d70993', 'type': 'corroboration', 'stage_from': 0, 'stage_to': 2}, {'from': '3781e0058d17e82f', 'to': '1a92ceab75d70993', 'type': 'corroboration', 'stage_from': 1, 'stage_to': 2}, {'from': 'df9fad9ef995843a', 'to': 'cc1054736ab84c96', 'type': 'corroboration', 'stage_from': 0, 'stage_to': 3}, {'from': 'df9fad9ef995843a', 'to': 'a1dec18ce46452e8', 'type': 'corroboration', 'stage_from': 0, 'stage_to': 3}], 'contradiction_edges': [], 'fingerprint': '95bc06f0a1178c72'}\nretrieval={'regions_planned': 1, 'queries_generated': 4, 'queries_executed': 4, 'raw_results': 40, 'after_search_url_filter': 24, 'after_site_filter': 24, 'after_ai_filter': 17, 'events_added': 0, 'regional_cursor': 39, 'regional_cycle': 0, 'regional_batch_wrapped': False, 'regional_collection_failed': False}\nCALIBRATION={'resolved': 145, 'base_rate': 14.48, 'brier': 0.144828, 'issued_brier': 0.132392, 'brier_skill_score': -0.169358, 'issued_brier_skill_score': -0.068948, 'calibration': [{'range': '0-9', 'n': 125, 'empirical_rate': 10.4}, {'range': '10-19', 'n': 20, 'empirical_rate': 40.0}], 'calibration_status': 'measured'}\nstructure_score and evidence_score are evidence-strength measures, not probabilities; root probability requires temporal historical calibration.",
+  "forecast_basis": "PATTERN_ENGINE\nscenario_id=prisoner_mobilization\npattern_stage=5\npattern_stage_name=root_scenario\nobserved_stages=['legal_or_policy_signal', 'administrative_preparation', 'organizational_or_logistical_action', 'operational_implementation', 'root_scenario']\nnext_stage=root_scenario\nnext_event_horizon=24-72h\nindependent_domains=53\nsource_families=53\nregions_with_signals=2\nacceleration=0.09\nstructure_score=47\nevidence_score=94\nevidence_metrics={'score': 94, 'target_events': 90, 'action_events': 46, 'independent_domains': 53, 'source_families': 53, 'primary_events': 14, 'negative_indicators': 2}\nnegative_indicators=2\ninterpretation=ordered multi-stage chain is forming\nevidence_chain={'version': 2, 'metrics': {'nodes': 90, 'edges': 40, 'source_families': 53, 'primary_nodes': 14, 'root_nodes': 2, 'ordered_support_edges': 40, 'contradictions': 10, 'regions_with_signals': 2, 'chain_score': 61}, 'support_edges': [{'from': 'df9fad9ef995843a', 'to': 'f9163a405f644d36', 'type': 'corroboration', 'stage_from': 0, 'stage_to': 1}, {'from': 'df9fad9ef995843a', 'to': 'f66ceb31c399e317', 'type': 'corroboration', 'stage_from': 0, 'stage_to': 1}, {'from': '48bb002634dba8f5', 'to': 'f9163a405f644d36', 'type': 'corroboration', 'stage_from': 0, 'stage_to': 1}, {'from': '48bb002634dba8f5', 'to': 'f66ceb31c399e317', 'type': 'corroboration', 'stage_from': 0, 'stage_to': 1}, {'from': 'dbd26dcfbe54e180', 'to': '0134727f53d73f34', 'type': 'corroboration', 'stage_from': 0, 'stage_to': 1}, {'from': '644132363c90b790', 'to': 'f9163a405f644d36', 'type': 'corroboration', 'stage_from': 0, 'stage_to': 1}, {'from': '644132363c90b790', 'to': 'f66ceb31c399e317', 'type': 'corroboration', 'stage_from': 0, 'stage_to': 1}, {'from': 'df9fad9ef995843a', 'to': '1a92ceab75d70993', 'type': 'corroboration', 'stage_from': 0, 'stage_to': 2}, {'from': '48bb002634dba8f5', 'to': '1a92ceab75d70993', 'type': 'corroboration', 'stage_from': 0, 'stage_to': 2}, {'from': '3781e0058d17e82f', 'to': '1a92ceab75d70993', 'type': 'corroboration', 'stage_from': 1, 'stage_to': 2}, {'from': 'df9fad9ef995843a', 'to': 'cc1054736ab84c96', 'type': 'corroboration', 'stage_from': 0, 'stage_to': 3}, {'from': 'df9fad9ef995843a', 'to': 'a1dec18ce46452e8', 'type': 'corroboration', 'stage_from': 0, 'stage_to': 3}], 'contradiction_edges': [], 'fingerprint': 'a62cc368329e9cae'}\nretrieval={'regions_planned': 1, 'queries_generated': 4, 'queries_executed': 4, 'raw_results': 40, 'after_search_url_filter': 24, 'after_site_filter': 24, 'after_ai_filter': 17, 'events_added': 1, 'regional_cursor': 39, 'regional_cycle': 0, 'regional_batch_wrapped': False, 'regional_collection_failed': False}\nCALIBRATION={'resolved': 146, 'base_rate': 14.38, 'brier': 0.143836, 'issued_brier': 0.131695, 'brier_skill_score': -0.168003, 'issued_brier_skill_score': -0.069414, 'calibration': [{'range': '0-9', 'n': 125, 'empirical_rate': 10.4}, {'range': '10-19', 'n': 21, 'empirical_rate': 38.1}], 'calibration_status': 'measured'}\nstructure_score and evidence_score are evidence-strength measures, not probabilities; root probability requires temporal historical calibration.",
   "analytical_status": "FAILED_AI",
   "hallucination_guard": "fallback_no_claim_without_evidence"
 }
